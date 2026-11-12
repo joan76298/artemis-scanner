@@ -112,7 +112,7 @@
   }
   function paso2() {
     ESTADO = INV.estado;
-    if (INV.estado === 'CERRADO') { pantalla('<div class="wrap"><div class="card"><h2>🏁 Inventario cerrado</h2><div>' + esc(INV.nlugar) + ' · ' + esc(INV.id) + '</div><div class="mut">Ya no se pueden enviar escaneos.</div>' + (Q.length ? '<div class="banner" style="background:#5b1622">⚠ Quedaron ' + Q.length + ' escaneos sin enviar en este teléfono. Avisa al coordinador.</div>' : '') + '</div></div>'); return; }
+    if (INV.estado === 'CERRADO' || INV.estado === 'ANULADO') { pantalla('<div class="wrap"><div class="card"><h2>🏁 Inventario ' + (INV.estado === 'ANULADO' ? 'anulado' : 'cerrado') + '</h2><div>' + esc(INV.nlugar) + ' · ' + esc(INV.id) + '</div><div class="mut">Ya no se pueden enviar escaneos.</div>' + (Q.length ? '<div class="banner" style="background:#5b1622">⚠ Quedaron ' + Q.length + ' escaneos sin enviar en este teléfono. Avisa al coordinador.</div>' : '') + '</div></div>'); return; }
     if (!USER) return elegirNombre();
     cargarCatalogo();
   }
@@ -191,7 +191,7 @@
     var t = String(raw || '').trim(); if (!t) return;
     var now = Date.now(); if (t === LAST.c && now - LAST.t < 1500) return; LAST = { c: t, t: now };
     if (/^https?:\/\//i.test(t)) return;
-    if (ESTADO === 'CERRADO') { mostrar('bad', '<h2>🏁 Inventario cerrado</h2>'); feedback('bad'); return; }
+    if (ESTADO === 'CERRADO' || ESTADO === 'ANULADO') { mostrar('bad', '<h2>🏁 Inventario ' + (ESTADO === 'ANULADO' ? 'anulado' : 'cerrado') + '</h2>'); feedback('bad'); return; }
     var i = buscar(t);
     if (i >= 0) {
       if (!UB) { mostrar('warn', '<h2>📍 Primero escanea el anaquel</h2><div class="mut">Así sabemos dónde está cada producto.</div>'); feedback('warn'); return; }
@@ -303,18 +303,18 @@
     api('push', { dev: DEV, user: USER, items: lote }).then(function (r) {
       ESTADO = r.estado || ESTADO; ERRSRV = '';
       if (r.ack >= 0) { Q = Q.filter(function (x) { return x.q > r.ack; }); guardar(); }
-    }).catch(function (e) { ERRSRV = e.message; if (/cerrado/i.test(e.message)) ESTADO = 'CERRADO'; })
+    }).catch(function (e) { ERRSRV = e.message; if (/cerrado/i.test(e.message)) ESTADO = 'CERRADO'; if (/anulado/i.test(e.message)) ESTADO = 'ANULADO'; })
       .then(function () { syncing = false; estadoPill(); if (Q.length && ESTADO === 'EN CURSO' && !ERRSRV) setTimeout(sync, 400); });
   }
   function estadoPill() {
     var p = $('sp'); if (!p) return;
     if (ESTADO === 'PAUSADO') { p.className = 'pill p-pau'; p.textContent = '⏸ Pausado · ' + Q.length + ' guardados'; }
-    else if (ESTADO === 'CERRADO') { p.className = 'pill p-off'; p.textContent = '🏁 Cerrado'; }
+    else if (ESTADO === 'CERRADO' || ESTADO === 'ANULADO') { p.className = 'pill p-off'; p.textContent = ESTADO === 'ANULADO' ? '🗑 Anulado' : '🏁 Cerrado'; }
     else if (!navigator.onLine) { p.className = 'pill p-off'; p.textContent = '📴 Sin señal · ' + Q.length + ' guardados'; }
     else if (Q.length) { p.className = 'pill p-wait'; p.textContent = '⏳ ' + Q.length + ' por enviar'; }
     else { p.className = 'pill p-ok'; p.textContent = '✔ Todo enviado'; }
     var e = $('est'); if (e) e.innerHTML = ESTADO === 'PAUSADO' ? '<div class="banner" style="background:#3d2a6b">⏸ El coordinador pausó el inventario. Puedes seguir escaneando: se guarda en el teléfono y se envía al reanudar.</div>'
-      : ESTADO === 'CERRADO' ? '<div class="banner" style="background:#5b1622">🏁 El inventario fue cerrado.' + (Q.length ? ' Quedaron ' + Q.length + ' escaneos sin enviar: avisa al coordinador.' : '') + '</div>'
+      : (ESTADO === 'CERRADO' || ESTADO === 'ANULADO') ? '<div class="banner" style="background:#5b1622">🏁 El inventario fue ' + (ESTADO === 'ANULADO' ? 'anulado' : 'cerrado') + '.' + (Q.length ? ' Quedaron ' + Q.length + ' escaneos sin enviar: avisa al coordinador.' : '') + '</div>'
       : (ERRSRV && Q.length ? '<div class="banner" style="background:#5a4206">⚠ ' + esc(ERRSRV) + ' · se reintentará solo</div>' : '');
   }
   setInterval(function () { if (ESTADO === 'PAUSADO' && INV) api('join').then(function (r) { ESTADO = r.inv.estado; estadoPill(); if (ESTADO === 'EN CURSO') sync(); }).catch(function () {}); else sync(); }, 8000);

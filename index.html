@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Artemis - Prueba camara</title>
+<style>
+  body{font-family:system-ui,Arial;margin:0;background:#0f172a;color:#e2e8f0}
+  header{padding:12px 16px;background:#1e293b;font-weight:700;font-size:18px}
+  #diag{padding:10px 16px;font-size:13px;line-height:1.6}
+  .ok{color:#4ade80}.no{color:#f87171}
+  #reader{width:100%;max-width:520px;margin:0 auto}
+  #btns{display:flex;gap:8px;padding:10px 16px}
+  button{flex:1;padding:14px;font-size:16px;border:0;border-radius:10px;font-weight:700}
+  #start{background:#22c55e;color:#052e16}#stop{background:#ef4444;color:#fff}
+  #last{margin:10px 16px;padding:16px;border-radius:12px;background:#1e293b;font-size:22px;text-align:center;transition:background .2s}
+  #last.flash{background:#16a34a}
+  #stats{padding:0 16px;font-size:14px}
+  #log{padding:6px 16px 40px;font-size:13px;font-family:monospace;white-space:pre-line;color:#94a3b8}
+</style>
+</head>
+<body>
+<header>📷 Artemis · Prueba de cámara (GitHub)</header>
+<div id="diag">Revisando teléfono…</div>
+<div id="btns"><button id="start">▶ Iniciar cámara</button><button id="stop">■ Parar</button></div>
+<div id="reader"></div>
+<div id="last">Escanea un código</div>
+<div id="stats"></div>
+<div id="log"></div>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id)};
+  function line(ok,txt){return '<span class="'+(ok?'ok':'no')+'">'+(ok?'✔':'✘')+'</span> '+txt+'<br>';}
+  var pp=false;
+  try{pp=document.featurePolicy?document.featurePolicy.allowsFeature('camera'):'(no se puede saber)';}catch(e){pp='(error)';}
+  var d='';
+  d+=line(window.isSecureContext,'Conexión segura (HTTPS)');
+  d+=line(!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia),'Acceso a cámara disponible');
+  d+=line(pp===true,'Página permite cámara: '+pp);
+  d+=line('BarcodeDetector' in window,'Lector nativo (rápido, Android/Chrome)');
+  d+=line(!!navigator.vibrate,'Vibración');
+  d+=line(typeof Html5Qrcode!=='undefined','Librería lectora cargada');
+  d+='<span style="color:#64748b">'+navigator.userAgent+'</span>';
+  $('diag').innerHTML=d;
+  var count=0,lastCode='',lastT=0,times=[],scanner=null,actx=null;
+  function beep(){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();var o=actx.createOscillator(),g=actx.createGain();o.connect(g);g.connect(actx.destination);o.frequency.value=1800;g.gain.value=.15;o.start();o.stop(actx.currentTime+.08);}catch(e){}}
+  function onScan(text,res){
+    var now=Date.now();
+    if(text===lastCode&&now-lastT<1500)return;
+    if(lastT)times.push(now-lastT);
+    lastCode=text;lastT=now;count++;
+    var fmt=(res&&res.result&&res.result.format&&res.result.format.formatName)||'';
+    $('last').textContent=text;
+    $('last').classList.add('flash');setTimeout(function(){$('last').classList.remove('flash')},250);
+    beep();if(navigator.vibrate)navigator.vibrate(60);
+    var prom=times.length?(times.reduce(function(a,b){return a+b},0)/times.length/1000).toFixed(1):'-';
+    $('stats').innerHTML='Escaneos: <b>'+count+'</b> · Promedio entre escaneos: <b>'+prom+' s</b>';
+    $('log').textContent=new Date().toLocaleTimeString()+'  '+text+'  '+fmt+'\n'+$('log').textContent;
+  }
+  $('start').onclick=function(){
+    if(typeof Html5Qrcode==='undefined'){alert('No cargó la librería');return;}
+    var F=Html5QrcodeSupportedFormats;
+    scanner=scanner||new Html5Qrcode('reader',{formatsToSupport:[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.CODE_39,F.ITF,F.QR_CODE],experimentalFeatures:{useBarCodeDetectorIfSupported:true},verbose:false});
+    scanner.start({facingMode:'environment'},{fps:15,qrbox:function(w,h){return {width:Math.floor(w*0.85),height:Math.floor(h*0.45)}}},onScan,function(){})
+      .then(function(){$('log').textContent='Cámara iniciada\n'+$('log').textContent;})
+      .catch(function(e){$('log').textContent='ERROR cámara: '+e+'\n'+$('log').textContent;$('last').textContent='❌ No se pudo abrir la cámara';});
+  };
+  $('stop').onclick=function(){if(scanner)scanner.stop().catch(function(){});};
+})();
+</script>
+</body>
+</html>

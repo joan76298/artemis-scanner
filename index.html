@@ -61,7 +61,7 @@
   if (P.get('s')) LS('aud_s', P.get('s'));
   var DEV = LS('aud_dev'); if (!DEV) { DEV = 'D' + Math.random().toString(36).slice(2, 10); LS('aud_dev', DEV); }
   var SEQ = Number(LS('aud_seq') || 0);
-  var INV = null, USER = '', CAT = [], IDX = {}, MC = {}, UBICS = [], UB = '', Q = [], HIST = [], CNT = { tot: 0, ub: {} }, LAST = { c: '', t: 0 }, FOT = {}, FASE = '', CATF2 = false, UASK = {}, ZONAS = ['VITRINA', 'PARED', 'MESA', 'ISLA', 'MOSTRADOR', 'ESCAPARATE'], scanner = null, actx = null, syncing = false, ESTADO = '', ERRSRV = '';
+  var INV = null, USER = '', CAT = [], IDX = {}, MC = {}, UBICS = [], UB = '', Q = [], HIST = [], CNT = { tot: 0, ub: {} }, LAST = { c: '', t: 0 }, FOT = {}, FASE = '', CATF2 = false, UASK = {}, MS = {}, PASK = {}, RC = null, RCI = null, ZONAS = ['VITRINA', 'PARED', 'MESA', 'ISLA', 'MOSTRADOR', 'ESCAPARATE'], scanner = null, actx = null, syncing = false, ESTADO = '', ERRSRV = '';
   var $ = function (id) { return document.getElementById(id); };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var sin0 = function (c) { return String(c == null ? '' : c).trim().replace(/^0+(?=.)/, ''); };
@@ -80,14 +80,15 @@
     try { CNT = JSON.parse(LS(K('c')) || '{"tot":0,"ub":{}}'); } catch (e) { CNT = { tot: 0, ub: {} }; }
     UB = LS(K('ub')) || ''; USER = LS(K('u')) || ''; FASE = LS(K('fase')) || '';
     try { UASK = JSON.parse(LS(K('ua')) || '{}'); } catch (e) { UASK = {}; }
+    try { PASK = JSON.parse(LS(K('pa')) || '{}'); MS = JSON.parse(LS(K('ms')) || '{}'); } catch (e) { PASK = {}; MS = {}; }
   }
   var ALMACEN = function () { return INV && (INV.lugar === 'PRI_DPAF' || INV.lugar === 'TARPRI'); };
   /* v81: fase sala de ventas (muestras, no suman) o almacén (cajas, sí suman). */
   function elegirFase() {
     pararCam();
     pantalla('<div class="wrap"><div class="card"><h2 style="margin-top:0">¿Qué vas a contar?</h2><div class="mut" style="margin-bottom:12px">Primero la sala de ventas (muestras) y después el almacén (cajas).</div>' +
-      '<button class="big g" id="fs" style="margin-bottom:10px">🏪 Sala de ventas · muestras</button><div class="mut" style="margin:-4px 0 14px">Escanea cada muestra exhibida. No suma al stock: sirve para saber qué está exhibido.</div>' +
-      '<button class="big o" id="fa">📦 Almacén · cajas</button><div class="mut" style="margin-top:6px">Escanea cada caja o prenda por anaquel. Esto sí es el conteo.</div></div></div>');
+      '<button class="big g" id="fs" style="margin-bottom:10px">🏪 Sala de ventas · muestras</button><div class="mut" style="margin:-4px 0 14px">Escanea cada muestra exhibida (zapatilla: solo el pie de muestra). Cuenta como 1 unidad.</div>' +
+      '<button class="big o" id="fa">📦 Almacén · cajas</button><div class="mut" style="margin-top:6px">Escanea cada caja o prenda por anaquel. Los pies derechos sueltos no se escanean.</div></div></div>');
     $('fs').onclick = function () { fijarFase('S'); }; $('fa').onclick = function () { fijarFase('A'); };
   }
   function fijarFase(f) { FASE = f; UB = ''; guardar(); principal(); }
@@ -147,7 +148,7 @@
     });
   }
   function usarCat(c) {
-    CATF2 = c.f === 2; if (!FASE && ALMACEN()) FASE = 'A';
+    CATF2 = c.f === 2; if (!FASE && (ALMACEN() || INV.tipo === 'SORPRESA')) FASE = 'A';
     CAT = c.rows; UBICS = c.ubics || []; IDX = {}; MC = {};
     CAT.forEach(function (r, i) {
       [r[0], r[1], r[2]].forEach(function (k) { if (k && IDX[k] == null) IDX[k] = i; });
@@ -161,8 +162,8 @@
   function principal() {
     var S = FASE === 'S';
     pantalla('<div class="top"><b>' + (S ? '🏪 ' : '📦 ') + esc(INV.nlugar) + ' · ' + esc(USER) + '</b><span class="pill p-ok" id="sp">✔</span></div><div class="wrap">' +
-      '<div class="banner" style="background:' + (S ? '#3d2a6b' : '#0b3a5c') + ';display:flex;justify-content:space-between;align-items:center;gap:8px"><span>' + (S ? '🏪 SALA DE VENTAS · muestras (no suman)' : '📦 ALMACÉN · cajas (conteo)') + '</span><a href="#" id="cfase" style="color:#9fd8ff;font-size:13px;white-space:nowrap">cambiar</a></div>' +
-      '<div id="est"></div><div id="ubx"></div><div id="reader"></div><button class="big g" id="cam" style="margin:10px 0">▶ Empezar a escanear</button>' +
+      '<div class="banner" style="background:' + (S ? '#3d2a6b' : '#0b3a5c') + ';display:flex;justify-content:space-between;align-items:center;gap:8px"><span>' + (S ? '🏪 SALA DE VENTAS · muestras (cuentan)' : '📦 ALMACÉN · cajas (conteo)') + '</span><a href="#" id="cfase" style="color:#9fd8ff;font-size:13px;white-space:nowrap">cambiar</a></div>' +
+      '<div id="est"></div>' + (INV.tipo === 'SORPRESA' ? '<div class="banner" style="background:#0e5132;display:flex;justify-content:space-between;align-items:center;gap:8px"><span>🎲 Auditoría sorpresa: busca y escanea estos productos</span><button class="big o" style="width:auto;padding:6px 12px;font-size:14px" id="srl">Ver lista</button></div>' : '') + '<div id="rcb"></div><div id="ubx"></div><div id="reader"></div><button class="big g" id="cam" style="margin:10px 0">▶ Empezar a escanear</button>' +
       '<div class="res" id="res"><div class="mut" style="width:100%;text-align:center">El producto escaneado aparece aquí con su foto</div></div>' +
       '<div class="cnt"><div><b id="cub">0</b><span>' + (S ? 'En esta zona' : 'En este anaquel') + '</span></div><div><b id="ctot">0</b><span>' + (S ? 'Mis muestras' : 'Mis unidades') + '</span></div></div>' +
       '<div class="acts"><button id="bman">⌨ Digitar</button><button id="bdes">↩ Deshacer último</button><button id="bub">📍 ' + (S ? 'Cambiar zona' : 'Cambiar ubicación') + '</button><button class="fin" id="bfin">✅ ' + (S ? 'Terminé esta zona' : 'Terminé este anaquel') + '</button></div>' +
@@ -176,11 +177,12 @@
       this.textContent = '⏸ Pausar cámara'; this.className = 'big o'; camara(onCode);
     };
     $('bman').onclick = manual; $('bdes').onclick = deshacer; $('bub').onclick = elegirUb; $('bfin').onclick = finUb;
+    if ($('srl')) $('srl').onclick = listaSorpresa;
     $('cfase').onclick = function (e) { e.preventDefault(); elegirFase(); }; if ($('bsala')) $('bsala').onclick = finSala;
     $('kbok').onclick = function () { var v = $('kb').value.trim(); $('kb').value = ''; if (v) { LAST.c = ''; onCode(v); } };
     $('kb').onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); $('kbok').onclick(); } };
     $('salir').onclick = function (e) { e.preventDefault(); if (confirm('¿Cambiar de persona en este teléfono?')) { LS(K('u'), null); USER = ''; pararCam(); elegirNombre(); } };
-    pintaUb(); pintaCnt(); pintaHist(); estadoPill();
+    pintaUb(); pintaCnt(); pintaHist(); estadoPill(); if (RCI) pintaRc(); else pollRc();
   }
   function pintaUb() {
     if (FASE === 'S' && !UB) {
@@ -197,10 +199,14 @@
       return '<div class="' + (h.x ? 'x' : '') + '"><span>' + (h.m === 'X' ? '❓ ' : h.m === 'M' ? '⌨ ' : h.m === 'S' ? '🏪 ' : '') + esc(h.d) + '</span><span class="mut">' + esc(h.u) + ' · ' + new Date(h.t).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) + '</span></div>';
     }).join('') || '<div class="mut">Aún nada</div>';
   }
+  /* v83: sonidos bien distintos. ok = bip agudo · warn = tin-tin · ask = tin-tin-tin subiendo · bad = zumbido grave que baja */
   function feedback(tipo) {
-    try { if (actx) { var o = actx.createOscillator(), g = actx.createGain(); o.connect(g); g.connect(actx.destination); o.frequency.value = tipo === 'ok' ? 1800 : tipo === 'warn' ? 900 : 300; g.gain.value = .18; o.start(); o.stop(actx.currentTime + (tipo === 'ok' ? .08 : .25)); } } catch (e) {}
-    if (navigator.vibrate) navigator.vibrate(tipo === 'ok' ? 60 : [120, 60, 120]);
+    try { if (actx) { var t0 = actx.currentTime, seq = tipo === 'ok' ? [[1800, 0, .07]] : tipo === 'warn' ? [[1000, 0, .09], [1000, .17, .09]] : tipo === 'ask' ? [[900, 0, .08], [1200, .14, .08], [1550, .28, .11]] : null;
+      if (seq) seq.forEach(function (q) { var o = actx.createOscillator(), g = actx.createGain(); o.connect(g); g.connect(actx.destination); o.frequency.value = q[0]; g.gain.value = .2; o.start(t0 + q[1]); o.stop(t0 + q[1] + q[2]); });
+      else { var o = actx.createOscillator(), g = actx.createGain(); o.type = 'sawtooth'; o.connect(g); g.connect(actx.destination); o.frequency.setValueAtTime(330, t0); o.frequency.linearRampToValueAtTime(130, t0 + .65); g.gain.value = .22; o.start(t0); o.stop(t0 + .65); } } } catch (e) {}
+    if (navigator.vibrate) navigator.vibrate(tipo === 'ok' ? 60 : tipo === 'warn' ? [80, 70, 80] : tipo === 'ask' ? [60, 50, 60, 50, 60] : 550);
   }
+
   function mostrar(cls, html, img) {
     var r = $('res'); if (!r) return;
     r.className = 'res ' + cls; r.innerHTML = (img !== undefined ? '<img id="rimg" src="' + (img || NOFOTO) + '">' : '') + '<div style="flex:1;min-width:0">' + html + '</div>';
@@ -215,6 +221,7 @@
     if (/^https?:\/\//i.test(t)) return;
     if (ESTADO === 'CERRADO' || ESTADO === 'ANULADO') { mostrar('bad', '<h2>🏁 Inventario ' + (ESTADO === 'ANULADO' ? 'anulado' : 'cerrado') + '</h2>'); feedback('bad'); return; }
     var i = buscar(t);
+    if (RCI) { recScan(i, t); return; }
     if (i >= 0) {
       if (!UB) { mostrar('warn', '<h2>📍 Primero ' + (FASE === 'S' ? 'elige la zona' : 'escanea el anaquel') + '</h2><div class="mut">Así sabemos dónde está cada producto.</div>'); feedback('warn'); return; }
       agregar(i, 1, 'E', t); return;
@@ -224,11 +231,11 @@
     desconocido(t);
   }
   function encolar(it) { it.q = ++SEQ; it.t = Date.now(); it.u = UB; Q.push(it); }
-  function agregar(i, n, modo, leido) {
+  function agregar(i, n, modo, leido, ok) {
     var r = CAT[i], mc = (r[3] + '-' + r[4]).toUpperCase(), dig = modo === 'M';
     if (FASE === 'S') modo = 'S';
     encolar({ l: leido || r[0], c: r[0], n: n, m: modo });
-    if (modo === 'S') CNT.s = (CNT.s || 0) + n; else CNT.tot += n; CNT.ub[UB] = (CNT.ub[UB] || 0) + n;
+    if (modo === 'S') { CNT.s = (CNT.s || 0) + n; if (n > 0) { MS[r[0]] = 1; LS(K('ms'), JSON.stringify(MS)); } } else CNT.tot += n; CNT.ub[UB] = (CNT.ub[UB] || 0) + n;
     var H = { q: SEQ, t: Date.now(), c: r[0], l: leido || r[0], u: UB, m: modo, n: n, d: r[3] + '-' + r[4] + ' · T' + r[6] }; HIST.push(H);
     guardar(); pintaCnt(); pintaHist();
     var noF = CATF2 && r[11] !== 1, us = String(r[10] || ''), fue = !noF && FASE === 'A' && CATF2 && us && UBICS.indexOf(UB) >= 0 && us.split('|').indexOf(UB) < 0 && !UASK[r[0] + '|' + UB];
@@ -241,6 +248,71 @@
     if (fue) { var dec = function (d) { UASK[r[0] + '|' + UB] = d; LS(K('ua'), JSON.stringify(UASK)); encolar({ l: d, c: r[0], n: 0, m: 'U' }); guardar(); syncPronto();
       mostrar('ok', '<h2>' + (d === 'MOVER' ? '📦 Anotado: lo mueves a ' + esc(us.split('|')[0]) : '📍 Anotado: se queda en ' + esc(UB)) + '</h2><div class="mut">' + esc(r[3] + '-' + r[4] + ' · T' + r[6]) + '</div>'); };
       $('umv').onclick = function () { dec('MOVER'); }; $('uqd').onclick = function () { dec('QUEDA'); }; }
+  }
+  /* 👟 v83: si un modelo-talla con muestra exhibida pasa el stock del sistema (suma de todos los teléfonos), Artemis avisa y se pregunta si alguna caja era solo el pie derecho. */
+  var EXA = {}, EXQ = [];
+  function revisaExceso(ex) {
+    (ex || []).forEach(function (q) { var ci = q[0], over = Number(q[1]) || 0; if ((EXA[ci] || 0) >= over) return; if (!HIST.some(function (h) { return h.c === ci && !h.x && h.n > 0; })) return;
+      if (!EXQ.some(function (e) { return e[0] === ci; })) EXQ.push([ci, over]); });
+    if (EXQ.length && !$('exb')) preguntaExceso();
+  }
+  function preguntaExceso() {
+    var q = EXQ.shift(); if (!q) return; var ci = q[0], over = q[1], i = buscar(ci), r = i >= 0 ? CAT[i] : null, mc = r ? (r[3] + '-' + r[4]).toUpperCase() : '';
+    mostrar('warn', '<h2>👟 ' + esc(r ? r[3] + '-' + r[4] + ' T' + r[6] : ci) + '</h2><div style="font-weight:800">Ya se contó más de lo que hay en sistema.</div><div>¿Alguna caja era solo el pie derecho?</div>' +
+      '<div style="display:flex;gap:6px;margin-top:8px" id="exb"><button class="big g" style="padding:10px;font-size:15px" id="exsi">Sí, resta 1</button><button class="big o" style="padding:10px;font-size:15px" id="exno">No, están bien</button></div>', r ? (FOT[mc] === undefined ? NOFOTO : FOT[mc]) : NOFOTO);
+    clearTimeout(mostrar._t); feedback('ask');
+    $('exsi').onclick = function () {
+      for (var k = HIST.length - 1; k >= 0; k--) { var h = HIST[k]; if (h.c !== ci || h.x || h.n <= 0) continue;
+        var g = UB; UB = h.u; encolar({ l: h.l || ci, c: ci, n: -1, m: h.m === 'S' ? 'S' : 'D' }); encolar({ l: 'PIE', c: ci, n: 0, m: 'R' }); UB = g;
+        h.x = true; if (h.m === 'S') CNT.s = (CNT.s || 1) - 1; else CNT.tot -= 1; CNT.ub[h.u] = (CNT.ub[h.u] || 1) - 1; break; }
+      EXA[ci] = over - 1; guardar(); pintaCnt(); pintaHist(); syncPronto(); mostrar('ok', '<h2>👟 Restado: era el pie derecho</h2>'); feedback('ok'); setTimeout(preguntaExceso, 1200); };
+    $('exno').onclick = function () { EXA[ci] = over; encolar({ l: 'OK', c: ci, n: 0, m: 'R' }); guardar(); syncPronto(); mostrar('ok', '<h2>✔ Anotado</h2>'); setTimeout(preguntaExceso, 800); };
+  }
+  /* 🎲 v84: auditoría sorpresa: la lista son los códigos del corte reducido (sin cantidades). */
+  function listaSorpresa() {
+    var L = CAT.map(function (r, i) { return i; }).filter(function (i) { return CAT[i][11] === 1; }), ya = {};
+    HIST.forEach(function (h) { if (!h.x && h.n > 0) ya[h.c] = (ya[h.c] || 0) + h.n; });
+    var m = document.createElement('div'); m.className = 'modal'; document.body.appendChild(m);
+    m.innerHTML = '<div><h2 style="margin-top:0">🎲 Productos a buscar (' + L.length + ')</h2><div class="mut">Búscalos en todas sus ubicaciones y escanea cada unidad que encuentres.</div><div class="list" style="margin:10px 0">' +
+      L.map(function (i) { var r = CAT[i]; return '<div><span>' + (ya[r[0]] ? '✅ ' : '⬜ ') + '<b>' + esc(r[3] + '-' + r[4]) + '</b> T' + esc(r[6]) + ' · ' + esc(r[7]) + (r[10] ? ' <span class="mut">📍 ' + esc(String(r[10]).split('|').join(', ')) + '</span>' : '') + '</span><span class="mut">' + (ya[r[0]] ? ya[r[0]] + ' esc.' : '') + '</span></div>'; }).join('') +
+      '</div><button class="big o" id="srx">Cerrar</button></div>';
+    $('srx').onclick = function () { m.remove(); };
+  }
+  /* 🔁 v83: reconteo por otra persona (sin cantidad esperada). */
+  function pollRc() {
+    if (!INV || DEMO || !USER || ESTADO !== 'EN CURSO' || !navigator.onLine) return;
+    api('rc', { user: USER }).then(function (r) {
+      MS = {}; (r.ms || []).forEach(function (c) { MS[c] = 1; }); LS(K('ms'), JSON.stringify(MS));
+      RC = r.rc; var hay = RC && RC.it.length; if ($('rcb')) $('rcb').innerHTML = hay ? '<div class="banner" style="background:#5a4206;display:flex;justify-content:space-between;align-items:center;gap:8px"><span>🔁 Tienes ' + RC.it.length + ' producto' + (RC.it.length === 1 ? '' : 's') + ' para recontar</span><button class="big o" style="width:auto;padding:6px 12px;font-size:14px" id="rcab">Abrir</button></div>' : '';
+      if (hay) $('rcab').onclick = listaRc;
+    }).catch(function () {});
+  }
+  function listaRc() {
+    if (!RC || !RC.it.length) { alert('No hay nada para recontar'); return; }
+    var m = document.createElement('div'); m.className = 'modal'; document.body.appendChild(m);
+    m.innerHTML = '<div><h2 style="margin-top:0">🔁 Recontar</h2><div class="mut">Busca cada producto en todas sus ubicaciones y escanea cada unidad que encuentres. No importa lo que contaron antes.</div><div class="list" style="margin:10px 0">' +
+      RC.it.map(function (ci) { var i = buscar(ci), r = i >= 0 ? CAT[i] : null; return '<div><span>' + (r ? '<b>' + esc(r[3] + '-' + r[4]) + '</b> T' + esc(r[6]) + ' · ' + esc(r[7]) + (r[10] ? ' <span class="mut">📍 ' + esc(String(r[10]).split('|').join(', ')) + '</span>' : '') : esc(ci)) + '</span><button class="big g" style="width:auto;padding:6px 12px;font-size:14px" data-rci="' + esc(ci) + '">Recontar</button></div>'; }).join('') +
+      '</div><button class="big o" id="rcx">Cerrar</button></div>';
+    $('rcx').onclick = function () { m.remove(); };
+    m.querySelectorAll('[data-rci]').forEach(function (b) { b.onclick = function () { m.remove(); empiezaRc(b.dataset.rci); }; });
+  }
+  function empiezaRc(ci) {
+    var i = buscar(ci); RCI = { ci: ci, i: i, n: 0 }; pintaRc();
+    mostrar('warn', '<h2>🔁 Recontando</h2><div class="mut">Escanea cada unidad. Si alguna no tiene etiqueta, usa +1.</div>', i >= 0 ? (FOT[(CAT[i][3] + '-' + CAT[i][4]).toUpperCase()] || NOFOTO) : NOFOTO); feedback('ask');
+  }
+  function pintaRc() {
+    var r = RCI && RCI.i >= 0 ? CAT[RCI.i] : null;
+    $('rcb').innerHTML = RCI ? '<div class="banner" style="background:#5a4206"><div>🔁 Recontando <b>' + esc(r ? r[3] + '-' + r[4] + ' T' + r[6] : RCI.ci) + '</b> · encontradas: <b style="font-size:22px">' + RCI.n + '</b></div><div style="display:flex;gap:6px;margin-top:8px"><button class="big o" style="padding:8px" id="rcm">−1</button><button class="big o" style="padding:8px" id="rcp">+1</button><button class="big g" style="padding:8px" id="rcf">✔ Terminé</button></div></div>' : '';
+    if (!RCI) return;
+    $('rcp').onclick = function () { recSuma(1); }; $('rcm').onclick = function () { if (RCI.n > 0) recSuma(-1); };
+    $('rcf').onclick = function () { if (!confirm('¿Terminaste? Encontraste ' + RCI.n + ' unidad(es) de este producto.')) return;
+      encolar({ l: 'R' + RC.r, c: RCI.ci, n: RCI.n, m: 'Z' }); guardar(); syncPronto();
+      RC.it = RC.it.filter(function (c) { return c !== RCI.ci; }); RCI = null; pintaRc(); mostrar('ok', '<h2>✔ Reconteo enviado</h2>'); feedback('ok'); setTimeout(pollRc, 4000); };
+  }
+  function recSuma(n) { encolar({ l: 'R' + RC.r, c: RCI.ci, n: n, m: 'C' }); RCI.n += n; guardar(); pintaRc(); syncPronto(); }
+  function recScan(i, t) {
+    if (i >= 0 && CAT[i][0] === RCI.ci) { recSuma(1); mostrar('ok', '<h2>+1 · ' + RCI.n + ' encontradas</h2>'); feedback('ok'); return; }
+    mostrar('bad', '<h2>❌ No es el producto que estás recontando</h2><div class="mut">Termina este reconteo (✔ Terminé) para volver a contar normal.</div>'); feedback('bad');
   }
   /* ❌ etiqueta equivocada: resta el escaneo, lo marca y abre Digitar para elegir el correcto. */
   function noEs(h) {
@@ -361,6 +433,8 @@
     api('push', { dev: DEV, user: USER, items: lote }).then(function (r) {
       ESTADO = r.estado || ESTADO; ERRSRV = '';
       if (r.ack >= 0) { Q = Q.filter(function (x) { return x.q > r.ack; }); guardar(); }
+      if (r.ms) { MS = {}; r.ms.forEach(function (c) { MS[c] = 1; }); LS(K('ms'), JSON.stringify(MS)); }
+      if (r.ex && r.ex.length) revisaExceso(r.ex);
     }).catch(function (e) { ERRSRV = e.message; if (/cerrado/i.test(e.message)) ESTADO = 'CERRADO'; if (/anulado/i.test(e.message)) ESTADO = 'ANULADO'; })
       .then(function () { syncing = false; estadoPill(); if (Q.length && ESTADO === 'EN CURSO' && !ERRSRV) setTimeout(sync, 400); });
   }
@@ -377,6 +451,7 @@
   }
   setInterval(function () { if (ESTADO === 'PAUSADO' && INV) api('join').then(function (r) { ESTADO = r.inv.estado; estadoPill(); if (ESTADO === 'EN CURSO') sync(); }).catch(function () {}); else sync(); }, 8000);
   window.addEventListener('online', function () { estadoPill(); sync(); });
+  setInterval(function () { if (!document.hidden && !RCI) pollRc(); }, 30000);
   window.addEventListener('offline', estadoPill);
   window.addEventListener('beforeunload', function (e) { if (Q.length) { e.preventDefault(); e.returnValue = ''; } });
 
@@ -402,6 +477,7 @@
         ['327806', '3278062', '4060509396727', 'F35543', '0', '0', '7', 'ADILETTE AQUA', 'ADIDAS', 'Sandalias', 'F2-01', 1],
         ['327805', '3278055', '4060509396697', 'F35543', '0', '0', '8', 'ADILETTE AQUA', 'ADIDAS', 'Sandalias', 'F2-01', 1],
         ['310845', '3108451', '4064037145970', 'FY8072', '0', '0', '11K', 'SAND ADILETTE AQUA K', 'ADIDAS', 'Sandalias', '', 0]] }) });
+      if (a === 'rc') return ok({ ok: true, ms: [], rc: null });
       if (a === 'sinexh') return ok({ ok: true, n: 2, l: [['F35539', '0', 'NEGRO', 'ADILETTE AQUA', 'ADIDAS'], ['FY8072', '0', '', 'SAND ADILETTE AQUA K', 'ADIDAS']] });
       if (a === 'push') { var mx = 0; (x.items || []).forEach(function (i) { mx = Math.max(mx, i.q); }); return ok({ ok: true, ack: mx, estado: 'EN CURSO' }); }
       if (a === 'fotos') return ok({ ok: true, fotos: {} });

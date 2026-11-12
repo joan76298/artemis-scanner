@@ -2,71 +2,355 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Artemis - Prueba camara</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#04122a">
+<title>Artemis · Escáner de inventario</title>
 <style>
-  body{font-family:system-ui,Arial;margin:0;background:#0f172a;color:#e2e8f0}
-  header{padding:12px 16px;background:#1e293b;font-weight:700;font-size:18px}
-  #diag{padding:10px 16px;font-size:13px;line-height:1.6}
-  .ok{color:#4ade80}.no{color:#f87171}
-  #reader{width:100%;max-width:520px;margin:0 auto}
-  #btns{display:flex;gap:8px;padding:10px 16px}
-  button{flex:1;padding:14px;font-size:16px;border:0;border-radius:10px;font-weight:700}
-  #start{background:#22c55e;color:#052e16}#stop{background:#ef4444;color:#fff}
-  #last{margin:10px 16px;padding:16px;border-radius:12px;background:#1e293b;font-size:22px;text-align:center;transition:background .2s}
-  #last.flash{background:#16a34a}
-  #stats{padding:0 16px;font-size:14px}
-  #log{padding:6px 16px 40px;font-size:13px;font-family:monospace;white-space:pre-line;color:#94a3b8}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:radial-gradient(ellipse at top,#0a2a55 0%,#04122a 60%,#020814 100%);color:#e6f0ff;min-height:100vh}
+  button{font:inherit;cursor:pointer}
+  .top{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(3,14,34,.92);border-bottom:1px solid rgba(79,195,255,.25)}
+  .top b{font-size:15px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pill{font-size:12px;font-weight:800;padding:5px 10px;border-radius:999px;white-space:nowrap}
+  .p-ok{background:#0e5132;color:#7dffb5}.p-wait{background:#5a4206;color:#ffd36b}.p-off{background:#5b1622;color:#ffb3bc}.p-pau{background:#3d2a6b;color:#d9c8ff}
+  .wrap{padding:12px;max-width:560px;margin:0 auto}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.03));border:1px solid rgba(120,180,255,.22);border-radius:18px;padding:14px;margin-bottom:12px}
+  .big{width:100%;padding:16px;border-radius:14px;border:1px solid #4fc3ff;background:linear-gradient(#1f6fd1,#164f9c);color:#fff;font-weight:800;font-size:18px}
+  .big.g{background:linear-gradient(#25b867,#16864a);border-color:#3ddc84}.big.o{background:transparent;color:#b9d3f5;border-color:rgba(120,180,255,.35)}
+  .ub{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:16px;font-size:24px;font-weight:900;letter-spacing:.5px;margin-bottom:10px;border:2px solid #4fc3ff;background:rgba(31,111,209,.25)}
+  .ub.no{border-color:#ffd36b;background:rgba(241,181,58,.15);color:#ffd36b;font-size:17px}
+  .ub small{font-size:12px;font-weight:600;color:#8fb0d8;display:block;letter-spacing:0}
+  #reader{width:100%;border-radius:16px;overflow:hidden;background:#000;min-height:40px}
+  #reader video{object-fit:cover}
+  .res{display:flex;gap:12px;align-items:center;border-radius:18px;padding:12px;border:2px solid rgba(120,180,255,.25);background:rgba(255,255,255,.05);transition:background .2s,border-color .2s;min-height:120px}
+  .res img{width:110px;height:110px;object-fit:contain;border-radius:12px;background:#fff;flex:none}
+  .res.ok{background:rgba(37,184,103,.25);border-color:#3ddc84}.res.bad{background:rgba(224,71,90,.28);border-color:#ff7d8c}.res.warn{background:rgba(241,181,58,.22);border-color:#ffd36b}
+  .res h2{margin:0;font-size:20px}.res .t{display:inline-block;margin-top:6px;background:#fff;color:#04122a;font-weight:900;font-size:22px;padding:2px 12px;border-radius:10px}
+  .mut{color:#8fb0d8;font-size:13px}
+  .cnt{display:flex;gap:10px;margin:10px 0}.cnt div{flex:1;text-align:center;background:rgba(255,255,255,.05);border:1px solid rgba(120,180,255,.2);border-radius:14px;padding:8px}
+  .cnt b{display:block;font-size:28px}.cnt span{font-size:11px;color:#8fb0d8;text-transform:uppercase;letter-spacing:.5px}
+  .acts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .acts button{padding:14px 8px;border-radius:14px;border:1px solid rgba(120,180,255,.35);background:rgba(255,255,255,.06);color:#fff;font-weight:800;font-size:15px}
+  .acts .fin{background:linear-gradient(#25b867,#16864a);border-color:#3ddc84}
+  .list div{display:flex;justify-content:space-between;gap:8px;padding:7px 2px;border-bottom:1px solid rgba(120,180,255,.12);font-size:14px}
+  .list .x{opacity:.45;text-decoration:line-through}
+  .modal{position:fixed;inset:0;z-index:50;background:rgba(2,8,20,.9);display:flex;align-items:flex-start;justify-content:center;padding:14px;overflow:auto}
+  .modal>div{background:#071a38;border:1px solid #4fc3ff;border-radius:18px;padding:16px;width:100%;max-width:520px}
+  .in{width:100%;padding:13px;border-radius:12px;border:1px solid rgba(120,180,255,.4);background:rgba(0,0,0,.3);color:#fff;font-size:17px}
+  .grp{border:1px solid rgba(120,180,255,.2);border-radius:14px;padding:10px;margin-top:10px;display:flex;gap:10px}
+  .grp img{width:70px;height:70px;object-fit:contain;background:#fff;border-radius:10px;flex:none}
+  .tallas{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .tallas button{min-width:52px;padding:10px 8px;border-radius:10px;border:1px solid #4fc3ff;background:rgba(31,111,209,.3);color:#fff;font-weight:900;font-size:16px}
+  .names button{display:block;width:100%;margin:8px 0;padding:16px;border-radius:14px;border:1px solid rgba(120,180,255,.35);background:rgba(255,255,255,.06);color:#fff;font-size:18px;font-weight:800;text-align:left}
+  .bar{height:12px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,#1f6fd1,#4fc3ff)}
+  .banner{padding:12px;border-radius:14px;margin-bottom:10px;font-weight:700}
+  .demo{background:#3d2a6b;color:#e6dcff;text-align:center;font-size:12px;padding:4px}
 </style>
 </head>
 <body>
-<header>📷 Artemis · Prueba de cámara (GitHub)</header>
-<div id="diag">Revisando teléfono…</div>
-<div id="btns"><button id="start">▶ Iniciar cámara</button><button id="stop">■ Parar</button></div>
-<div id="reader"></div>
-<div id="last">Escanea un código</div>
-<div id="stats"></div>
-<div id="log"></div>
+<div id="app"><div class="wrap"><div class="card">Cargando…</div></div></div>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
-(function(){
-  var $=function(id){return document.getElementById(id)};
-  function line(ok,txt){return '<span class="'+(ok?'ok':'no')+'">'+(ok?'✔':'✘')+'</span> '+txt+'<br>';}
-  var pp=false;
-  try{pp=document.featurePolicy?document.featurePolicy.allowsFeature('camera'):'(no se puede saber)';}catch(e){pp='(error)';}
-  var d='';
-  d+=line(window.isSecureContext,'Conexión segura (HTTPS)');
-  d+=line(!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia),'Acceso a cámara disponible');
-  d+=line(pp===true,'Página permite cámara: '+pp);
-  d+=line('BarcodeDetector' in window,'Lector nativo (rápido, Android/Chrome)');
-  d+=line(!!navigator.vibrate,'Vibración');
-  d+=line(typeof Html5Qrcode!=='undefined','Librería lectora cargada');
-  d+='<span style="color:#64748b">'+navigator.userAgent+'</span>';
-  $('diag').innerHTML=d;
-  var count=0,lastCode='',lastT=0,times=[],scanner=null,actx=null;
-  function beep(){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();var o=actx.createOscillator(),g=actx.createGain();o.connect(g);g.connect(actx.destination);o.frequency.value=1800;g.gain.value=.15;o.start();o.stop(actx.currentTime+.08);}catch(e){}}
-  function onScan(text,res){
-    var now=Date.now();
-    if(text===lastCode&&now-lastT<1500)return;
-    if(lastT)times.push(now-lastT);
-    lastCode=text;lastT=now;count++;
-    var fmt=(res&&res.result&&res.result.format&&res.result.format.formatName)||'';
-    $('last').textContent=text;
-    $('last').classList.add('flash');setTimeout(function(){$('last').classList.remove('flash')},250);
-    beep();if(navigator.vibrate)navigator.vibrate(60);
-    var prom=times.length?(times.reduce(function(a,b){return a+b},0)/times.length/1000).toFixed(1):'-';
-    $('stats').innerHTML='Escaneos: <b>'+count+'</b> · Promedio entre escaneos: <b>'+prom+' s</b>';
-    $('log').textContent=new Date().toLocaleTimeString()+'  '+text+'  '+fmt+'\n'+$('log').textContent;
+(function () {
+  'use strict';
+  var EXEC = 'https://script.google.com/macros/s/AKfycbyoRhC11wXnd_ZWzVO4QrmIhw19V8KsOvbvRsJjtr_HEKHhk1eUPgINMsgQjItA2jvY/exec';
+  var P = new URLSearchParams(location.search), DEMO = P.get('demo') === '1';
+  if (P.get('x') && /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(P.get('x'))) EXEC = P.get('x');
+  var LS = function (k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } };
+  var TOKEN = DEMO ? 'DEMO' : (P.get('s') || LS('aud_s') || '');
+  if (P.get('s')) LS('aud_s', P.get('s'));
+  var DEV = LS('aud_dev'); if (!DEV) { DEV = 'D' + Math.random().toString(36).slice(2, 10); LS('aud_dev', DEV); }
+  var SEQ = Number(LS('aud_seq') || 0);
+  var INV = null, USER = '', CAT = [], IDX = {}, MC = {}, UBICS = [], UB = '', Q = [], HIST = [], CNT = { tot: 0, ub: {} }, LAST = { c: '', t: 0 }, FOT = {}, scanner = null, actx = null, syncing = false, ESTADO = '', ERRSRV = '';
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var sin0 = function (c) { return String(c == null ? '' : c).trim().replace(/^0+(?=.)/, ''); };
+  var K = function (k) { return 'aud_' + k + '_' + TOKEN; };
+  var NOFOTO = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="110" height="110"><rect width="110" height="110" fill="#e9eef5"/><text x="55" y="50" font-size="30" text-anchor="middle">📷</text><text x="55" y="78" font-size="13" text-anchor="middle" fill="#5b6575" font-family="Arial">Sin foto</text></svg>');
+
+  /* ---------- almacenamiento en el teléfono (IndexedDB para el catálogo y fotos) ---------- */
+  var DB = null;
+  function idb() { return new Promise(function (ok, ko) { if (DB) return ok(DB); var r = indexedDB.open('artemis_aud', 1); r.onupgradeneeded = function () { r.result.createObjectStore('kv'); }; r.onsuccess = function () { DB = r.result; ok(DB); }; r.onerror = function () { ko(r.error); }; }); }
+  function iget(k) { return idb().then(function (db) { return new Promise(function (ok) { var t = db.transaction('kv').objectStore('kv').get(k); t.onsuccess = function () { ok(t.result); }; t.onerror = function () { ok(null); }; }); }).catch(function () { return null; }); }
+  function iset(k, v) { return idb().then(function (db) { return new Promise(function (ok) { var t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = function () { ok(true); }; t.onerror = function () { ok(false); }; }); }).catch(function () { return false; }); }
+  function guardar() { LS(K('q'), JSON.stringify(Q)); LS(K('h'), JSON.stringify(HIST.slice(-60))); LS(K('c'), JSON.stringify(CNT)); LS(K('ub'), UB); LS('aud_seq', String(SEQ)); }
+  function recuperar() {
+    try { Q = JSON.parse(LS(K('q')) || '[]'); } catch (e) { Q = []; }
+    try { HIST = JSON.parse(LS(K('h')) || '[]'); } catch (e) { HIST = []; }
+    try { CNT = JSON.parse(LS(K('c')) || '{"tot":0,"ub":{}}'); } catch (e) { CNT = { tot: 0, ub: {} }; }
+    UB = LS(K('ub')) || ''; USER = LS(K('u')) || '';
   }
-  $('start').onclick=function(){
-    if(typeof Html5Qrcode==='undefined'){alert('No cargó la librería');return;}
-    var F=Html5QrcodeSupportedFormats;
-    scanner=scanner||new Html5Qrcode('reader',{formatsToSupport:[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.CODE_39,F.ITF,F.QR_CODE],experimentalFeatures:{useBarCodeDetectorIfSupported:true},verbose:false});
-    scanner.start({facingMode:'environment'},{fps:15,qrbox:function(w,h){return {width:Math.floor(w*0.85),height:Math.floor(h*0.45)}}},onScan,function(){})
-      .then(function(){$('log').textContent='Cámara iniciada\n'+$('log').textContent;})
-      .catch(function(e){$('log').textContent='ERROR cámara: '+e+'\n'+$('log').textContent;$('last').textContent='❌ No se pudo abrir la cámara';});
-  };
-  $('stop').onclick=function(){if(scanner)scanner.stop().catch(function(){});};
+
+  /* ---------- servidor ---------- */
+  function api(a, extra) {
+    if (DEMO) return demoApi(a, extra);
+    var body = Object.assign({ a: a, s: TOKEN }, extra || {});
+    return fetch(EXEC, { method: 'POST', body: JSON.stringify(body) }).then(function (r) { return r.json(); })
+      .then(function (j) { if (!j.ok) throw new Error(j.error || 'Error del servidor'); return j; });
+  }
+
+  /* ---------- pantallas ---------- */
+  function pantalla(h) { $('app').innerHTML = (DEMO ? '<div class="demo">MODO DEMO · nada se envía a Artemis</div>' : '') + h; }
+  function inicio() {
+    recuperar();
+    if (!TOKEN) return sinCodigo();
+    pantalla('<div class="wrap"><div class="card">⏳ Conectando con el inventario…</div></div>');
+    api('join').then(function (r) { INV = r.inv; LS(K('inv'), JSON.stringify(INV)); paso2(); })
+      .catch(function (e) {
+        var c = LS(K('inv'));
+        if (c && !navigator.onLine) { INV = JSON.parse(c); paso2(); return; }
+        pantalla('<div class="wrap"><div class="card"><h2>⚠ No se pudo entrar</h2><div>' + esc(e.message) + '</div><br><button class="big" id="rt">Reintentar</button><br><br><button class="big o" id="nq">Escanear otro QR</button></div></div>');
+        $('rt').onclick = inicio; $('nq').onclick = function () { LS('aud_s', null); TOKEN = ''; sinCodigo(); };
+      });
+  }
+  function sinCodigo() {
+    pantalla('<div class="wrap"><div class="card"><h2 style="margin-top:0">📱 Artemis · Escáner</h2><div class="mut" style="margin-bottom:12px">Escanea el código QR del inventario que muestra la pantalla del coordinador.</div><div id="reader"></div><br><button class="big" id="qs">📷 Escanear QR</button></div></div>');
+    $('qs').onclick = function () {
+      this.style.display = 'none';
+      camara(function (t) { var m = String(t).match(/[?&]s=([\w-]{16,})/); if (m) { pararCam(); LS('aud_s', m[1]); TOKEN = m[1]; inicio(); } });
+    };
+  }
+  function paso2() {
+    ESTADO = INV.estado;
+    if (INV.estado === 'CERRADO') { pantalla('<div class="wrap"><div class="card"><h2>🏁 Inventario cerrado</h2><div>' + esc(INV.nlugar) + ' · ' + esc(INV.id) + '</div><div class="mut">Ya no se pueden enviar escaneos.</div>' + (Q.length ? '<div class="banner" style="background:#5b1622">⚠ Quedaron ' + Q.length + ' escaneos sin enviar en este teléfono. Avisa al coordinador.</div>' : '') + '</div></div>'); return; }
+    if (!USER) return elegirNombre();
+    cargarCatalogo();
+  }
+  function elegirNombre() {
+    pantalla('<div class="wrap"><div class="card"><h2 style="margin-top:0">👋 ¿Quién eres?</h2><div class="mut">' + esc(INV.nlugar) + ' · ' + esc(INV.id) + '</div><div class="names">' +
+      (INV.equipo || []).map(function (n, i) { return '<button data-n="' + i + '">👤 ' + esc(n) + '</button>'; }).join('') +
+      '</div><input class="in" id="otro" placeholder="Otro nombre…"><br><br><button class="big" id="okn">Continuar</button></div></div>');
+    document.querySelectorAll('[data-n]').forEach(function (b) { b.onclick = function () { fijarNombre(INV.equipo[Number(b.dataset.n)]); }; });
+    $('okn').onclick = function () { var n = $('otro').value.trim(); if (n.length < 2) { alert('Escribe tu nombre'); return; } fijarNombre(n); };
+  }
+  function fijarNombre(n) { USER = n; LS(K('u'), n); cargarCatalogo(); }
+  function cargarCatalogo() {
+    pantalla('<div class="wrap"><div class="card"><h2 style="margin-top:0">📦 Preparando el catálogo</h2><div class="mut" id="cm">Buscando en el teléfono…</div><br><div class="bar"><i id="cb" style="width:15%"></i></div></div></div>');
+    iget('cat_' + INV.id).then(function (c) {
+      if (c && c.rows && c.rows.length) { usarCat(c); return; }
+      $('cm').textContent = 'Descargando todos los códigos (solo la primera vez)…'; $('cb').style.width = '45%';
+      api('cat').then(function (r) {
+        var c2 = JSON.parse(r.cat); $('cb').style.width = '85%'; $('cm').textContent = 'Guardando en el teléfono…';
+        iset('cat_' + INV.id, c2).then(function () { usarCat(c2); });
+      }).catch(function (e) { $('cm').innerHTML = '❌ ' + esc(e.message) + '<br><br><button class="big" id="rc">Reintentar</button>'; $('rc').onclick = cargarCatalogo; });
+    });
+  }
+  function usarCat(c) {
+    CAT = c.rows; UBICS = c.ubics || []; IDX = {}; MC = {};
+    CAT.forEach(function (r, i) {
+      [r[0], r[1], r[2]].forEach(function (k) { if (k && IDX[k] == null) IDX[k] = i; });
+      var mc = (r[3] + '-' + r[4]).toUpperCase(); (MC[mc] = MC[mc] || []).push(i);
+    });
+    principal();
+  }
+
+  /* ---------- pantalla principal ---------- */
+  function principal() {
+    pantalla('<div class="top"><b>📦 ' + esc(INV.nlugar) + ' · ' + esc(USER) + '</b><span class="pill p-ok" id="sp">✔</span></div><div class="wrap">' +
+      '<div id="est"></div><div id="ubx"></div><div id="reader"></div><button class="big g" id="cam" style="margin:10px 0">▶ Empezar a escanear</button>' +
+      '<div class="res" id="res"><div class="mut" style="width:100%;text-align:center">El producto escaneado aparece aquí con su foto</div></div>' +
+      '<div class="cnt"><div><b id="cub">0</b><span>En este anaquel</span></div><div><b id="ctot">0</b><span>Mis unidades</span></div></div>' +
+      '<div class="acts"><button id="bman">⌨ Digitar</button><button id="bdes">↩ Deshacer último</button><button id="bub">📍 Cambiar ubicación</button><button class="fin" id="bfin">✅ Terminé este anaquel</button></div>' +
+      '<div style="display:flex;gap:8px;margin-top:10px"><input class="in" id="kb" placeholder="Pistola Bluetooth o escribe el código" inputmode="text" autocomplete="off"><button class="big o" style="width:auto;padding:0 16px" id="kbok">OK</button></div>' +
+      '<div class="card" style="margin-top:12px"><b>🕘 Mis últimos escaneos</b><div class="list" id="hist"></div></div>' +
+      '<div class="mut" style="text-align:center;margin:10px 0 30px">' + esc(INV.id) + ' · <a href="#" id="salir" style="color:#8fb0d8">cambiar de persona</a></div></div>');
+    $('cam').onclick = function () {
+      try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+      if (scanner && scanner._on) { pararCam(); this.textContent = '▶ Empezar a escanear'; this.className = 'big g'; return; }
+      this.textContent = '⏸ Pausar cámara'; this.className = 'big o'; camara(onCode);
+    };
+    $('bman').onclick = manual; $('bdes').onclick = deshacer; $('bub').onclick = elegirUb; $('bfin').onclick = finUb;
+    $('kbok').onclick = function () { var v = $('kb').value.trim(); $('kb').value = ''; if (v) { LAST.c = ''; onCode(v); } };
+    $('kb').onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); $('kbok').onclick(); } };
+    $('salir').onclick = function (e) { e.preventDefault(); if (confirm('¿Cambiar de persona en este teléfono?')) { LS(K('u'), null); USER = ''; pararCam(); elegirNombre(); } };
+    pintaUb(); pintaCnt(); pintaHist(); estadoPill();
+  }
+  function pintaUb() {
+    $('ubx').innerHTML = UB ? '<div class="ub"><span>📍</span><div>' + esc(UB) + '<small>Ubicación actual · escanea otra etiqueta para cambiar</small></div></div>'
+      : '<div class="ub no">📍 Escanea la etiqueta del anaquel para empezar</div>';
+  }
+  function pintaCnt() { $('cub').textContent = UB ? (CNT.ub[UB] || 0) : 0; $('ctot').textContent = CNT.tot; }
+  function pintaHist() {
+    $('hist').innerHTML = HIST.slice(-8).reverse().map(function (h) {
+      return '<div class="' + (h.x ? 'x' : '') + '"><span>' + (h.m === 'X' ? '❓ ' : h.m === 'M' ? '⌨ ' : '') + esc(h.d) + '</span><span class="mut">' + esc(h.u) + ' · ' + new Date(h.t).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) + '</span></div>';
+    }).join('') || '<div class="mut">Aún nada</div>';
+  }
+  function feedback(tipo) {
+    try { if (actx) { var o = actx.createOscillator(), g = actx.createGain(); o.connect(g); g.connect(actx.destination); o.frequency.value = tipo === 'ok' ? 1800 : tipo === 'warn' ? 900 : 300; g.gain.value = .18; o.start(); o.stop(actx.currentTime + (tipo === 'ok' ? .08 : .25)); } } catch (e) {}
+    if (navigator.vibrate) navigator.vibrate(tipo === 'ok' ? 60 : [120, 60, 120]);
+  }
+  function mostrar(cls, html, img) {
+    var r = $('res'); if (!r) return;
+    r.className = 'res ' + cls; r.innerHTML = (img !== undefined ? '<img id="rimg" src="' + (img || NOFOTO) + '">' : '') + '<div style="flex:1;min-width:0">' + html + '</div>';
+    clearTimeout(mostrar._t); mostrar._t = setTimeout(function () { if ($('res')) $('res').classList.remove('ok', 'bad', 'warn'); }, 900);
+  }
+
+  /* ---------- escaneo ---------- */
+  function buscar(t) { var k = sin0(t); return IDX[k] != null ? IDX[k] : (IDX[t] != null ? IDX[t] : -1); }
+  function onCode(raw) {
+    var t = String(raw || '').trim(); if (!t) return;
+    var now = Date.now(); if (t === LAST.c && now - LAST.t < 1500) return; LAST = { c: t, t: now };
+    if (/^https?:\/\//i.test(t)) return;
+    if (ESTADO === 'CERRADO') { mostrar('bad', '<h2>🏁 Inventario cerrado</h2>'); feedback('bad'); return; }
+    var i = buscar(t);
+    if (i >= 0) {
+      if (!UB) { mostrar('warn', '<h2>📍 Primero escanea el anaquel</h2><div class="mut">Así sabemos dónde está cada producto.</div>'); feedback('warn'); return; }
+      agregar(i, 1, 'E', t); return;
+    }
+    if (/[A-Za-z]/.test(t) && t.length <= 40) { fijarUb(t.toUpperCase()); return; }
+    if (!UB) { mostrar('warn', '<h2>📍 Primero escanea el anaquel</h2>'); feedback('warn'); return; }
+    desconocido(t);
+  }
+  function encolar(it) { it.q = ++SEQ; it.t = Date.now(); it.u = UB; Q.push(it); }
+  function agregar(i, n, modo, leido) {
+    var r = CAT[i], mc = (r[3] + '-' + r[4]).toUpperCase();
+    encolar({ l: leido || r[0], c: r[0], n: n, m: modo });
+    CNT.tot += n; CNT.ub[UB] = (CNT.ub[UB] || 0) + n;
+    HIST.push({ q: SEQ, t: Date.now(), c: r[0], u: UB, m: modo, n: n, d: r[3] + '-' + r[4] + ' · T' + r[6] });
+    guardar(); pintaCnt(); pintaHist();
+    mostrar('ok', '<h2>' + esc(r[3]) + ' <span style="color:#4fc3ff">' + esc(r[4]) + '</span></h2><div>' + esc(r[7]) + '</div><div class="mut">' + esc(r[5]) + ' · ' + esc(r[8]) + '</div><span class="t">T ' + esc(r[6]) + '</span>' + (modo === 'M' ? ' <span class="pill p-wait">digitado</span>' : ''), FOT[mc] === undefined ? NOFOTO : FOT[mc]);
+    feedback('ok'); foto(mc); syncPronto();
+  }
+  function desconocido(t) {
+    encolar({ l: t, c: '', n: 1, m: 'X' });
+    CNT.tot += 1; CNT.ub[UB] = (CNT.ub[UB] || 0) + 1;
+    HIST.push({ q: SEQ, t: Date.now(), c: '', l: t, u: UB, m: 'X', n: 1, d: 'Código ' + t });
+    guardar(); pintaCnt(); pintaHist();
+    mostrar('bad', '<h2>❓ Código no encontrado</h2><div style="font-size:18px;font-weight:800">' + esc(t) + '</div><div class="mut">Quedó registrado para revisión. Si es un error, toca ↩ Deshacer. Revisa la etiqueta o usa ⌨ Digitar.</div>', NOFOTO);
+    feedback('bad'); syncPronto();
+  }
+  function fijarUb(u) {
+    if (UB === u) { mostrar('warn', '<h2>📍 Ya estás en ' + esc(u) + '</h2>'); return; }
+    var conocido = !UBICS.length || UBICS.indexOf(u) >= 0;
+    UB = u; guardar(); pintaUb(); pintaCnt();
+    mostrar(conocido ? 'ok' : 'warn', '<h2>📍 Ubicación: ' + esc(u) + '</h2><div class="mut">' + (conocido ? 'Ahora escanea los productos de este anaquel.' : 'Esta ubicación no figura en el sistema. Revisa que la etiqueta sea correcta.') + '</div>');
+    feedback(conocido ? 'ok' : 'warn');
+  }
+  function finUb() {
+    if (!UB) { alert('Primero escanea un anaquel'); return; }
+    if (!confirm('¿Terminaste el anaquel ' + UB + ' (' + (CNT.ub[UB] || 0) + ' unidades)?')) return;
+    encolar({ l: '', c: '', n: 0, m: 'F' }); var u = UB; UB = ''; guardar(); pintaUb(); pintaCnt();
+    mostrar('ok', '<h2>✅ ' + esc(u) + ' terminado</h2><div class="mut">Escanea la etiqueta del siguiente anaquel.</div>'); feedback('ok'); syncPronto();
+  }
+  function deshacer() {
+    for (var i = HIST.length - 1; i >= 0; i--) {
+      var h = HIST[i]; if (h.x || h.n <= 0) continue;
+      if (!confirm('¿Deshacer: ' + h.d + ' (' + h.u + ')?')) return;
+      var guardaUb = UB; UB = h.u;
+      encolar({ l: h.l || h.c, c: h.c, n: -1, m: h.m === 'X' ? 'X' : 'D' });
+      UB = guardaUb; h.x = true; CNT.tot -= 1; CNT.ub[h.u] = (CNT.ub[h.u] || 1) - 1;
+      guardar(); pintaCnt(); pintaHist(); mostrar('warn', '<h2>↩ Deshecho</h2><div>' + esc(h.d) + '</div>'); syncPronto(); return;
+    }
+    alert('No hay nada para deshacer');
+  }
+  function elegirUb() {
+    var m = document.createElement('div'); m.className = 'modal';
+    m.innerHTML = '<div><h2 style="margin-top:0">📍 Ubicación</h2><div class="mut">Lo normal es escanear la etiqueta del anaquel. Si no tiene etiqueta, escríbela o elígela:</div><br><input class="in" id="ubq" placeholder="Ej.: F1-01" style="text-transform:uppercase"><div id="ubl" style="margin-top:8px;max-height:45vh;overflow:auto"></div><br><button class="big o" id="ubc">Cancelar</button></div>';
+    document.body.appendChild(m);
+    var pinta = function () { var q = $('ubq').value.trim().toUpperCase(); var L = UBICS.filter(function (u) { return !q || u.indexOf(q) >= 0; }).slice(0, 40);
+      if (q && L.indexOf(q) < 0) L.unshift(q);
+      $('ubl').innerHTML = L.map(function (u) { return '<button class="big o" style="margin:4px 0;text-align:left" data-u="' + esc(u) + '">📍 ' + esc(u) + '</button>'; }).join('');
+      m.querySelectorAll('[data-u]').forEach(function (b) { b.onclick = function () { m.remove(); fijarUb(b.dataset.u); }; }); };
+    $('ubq').oninput = pinta; pinta(); $('ubc').onclick = function () { m.remove(); };
+  }
+  function manual() {
+    if (!UB) { alert('Primero escanea o elige la ubicación'); return; }
+    var m = document.createElement('div'); m.className = 'modal';
+    m.innerHTML = '<div><h2 style="margin-top:0">⌨ Digitar</h2><div class="mut">Escribe el modelo y el color (ej.: 309668-31 o 309668 31) o el código de barras.</div><br><input class="in" id="mq" autocomplete="off" style="text-transform:uppercase"><div id="ml"></div><br><button class="big o" id="mc">Cerrar</button></div>';
+    document.body.appendChild(m); $('mq').focus();
+    var pinta = function () {
+      var q = $('mq').value.trim().toUpperCase(); if (q.length < 3) { $('ml').innerHTML = ''; return; }
+      if (/^\d{6,}$/.test(q) && buscar(q) >= 0) { $('ml').innerHTML = '<button class="big g" style="margin-top:10px" id="mcod">➕ Agregar código ' + esc(q) + '</button>'; $('mcod').onclick = function () { agregar(buscar(q), 1, 'M', q); $('mq').value = ''; pinta(); }; return; }
+      var p = q.replace(/[\s\/]+/g, '-').replace(/-+/g, '-'), parts = p.split('-'), mod = parts[0], col = parts.slice(1).join('-');
+      var keys = Object.keys(MC).filter(function (k) { var kp = k.split('-'); return kp[0].indexOf(mod) === 0 && (!col || kp.slice(1).join('-').indexOf(col) === 0); }).slice(0, 8);
+      $('ml').innerHTML = keys.map(function (k) {
+        var rs = MC[k].map(function (i) { return CAT[i]; }), r0 = rs[0];
+        rs = MC[k].slice().sort(function (a, b) { var ta = CAT[a][6], tb = CAT[b][6], na = parseFloat(ta), nb = parseFloat(tb); return (isNaN(na) || isNaN(nb)) ? (ta < tb ? -1 : 1) : na - nb; });
+        return '<div class="grp"><img data-f="' + esc(k) + '" src="' + (FOT[k] || NOFOTO) + '"><div style="flex:1"><b>' + esc(k) + '</b><div class="mut">' + esc(r0[7]) + ' · ' + esc(r0[5]) + '</div><div class="tallas">' +
+          rs.map(function (i) { return '<button data-i="' + i + '">' + esc(CAT[i][6]) + '</button>'; }).join('') + '</div></div></div>';
+      }).join('') || '<div class="mut" style="margin-top:10px">Sin resultados</div>';
+      m.querySelectorAll('[data-i]').forEach(function (b) { b.onclick = function () { agregar(Number(b.dataset.i), 1, 'M'); b.style.background = '#16864a'; var n = Number(b.dataset.c || 0) + 1; b.dataset.c = n; b.textContent = CAT[Number(b.dataset.i)][6] + ' ✔' + (n > 1 ? n : ''); }; });
+      keys.forEach(function (k) { foto(k); });
+    };
+    $('mq').oninput = pinta; $('mc').onclick = function () { m.remove(); };
+  }
+
+  /* ---------- fotos (se piden al servidor y se guardan en el teléfono) ---------- */
+  var fotPend = {};
+  function foto(mc) {
+    if (FOT[mc] !== undefined || fotPend[mc]) return;
+    fotPend[mc] = 1;
+    iget('f_' + mc).then(function (v) {
+      if (v != null) { FOT[mc] = v; delete fotPend[mc]; ponerFoto(mc); return; }
+      if (!navigator.onLine) { delete fotPend[mc]; return; }
+      api('fotos', { keys: [mc] }).then(function (r) { var d = (r.fotos || {})[mc]; if (d === undefined) { delete fotPend[mc]; return; } FOT[mc] = d || ''; iset('f_' + mc, FOT[mc]); delete fotPend[mc]; ponerFoto(mc); })
+        .catch(function () { delete fotPend[mc]; });
+    });
+  }
+  function ponerFoto(mc) {
+    var src = FOT[mc] || NOFOTO;
+    document.querySelectorAll('[data-f="' + mc + '"]').forEach(function (im) { im.src = src; });
+    var last = HIST[HIST.length - 1]; if (last && $('rimg') && last.d.toUpperCase().indexOf(mc) === 0) $('rimg').src = src;
+  }
+
+  /* ---------- envío por lotes (si no hay señal, se guarda y se envía después) ---------- */
+  var tSync = null;
+  function syncPronto() { clearTimeout(tSync); tSync = setTimeout(sync, 2500); estadoPill(); }
+  function sync() {
+    if (syncing || !Q.length || !INV) { estadoPill(); return; }
+    if (!navigator.onLine) { estadoPill(); return; }
+    syncing = true; var lote = Q.slice(0, 300);
+    api('push', { dev: DEV, user: USER, items: lote }).then(function (r) {
+      ESTADO = r.estado || ESTADO; ERRSRV = '';
+      if (r.ack >= 0) { Q = Q.filter(function (x) { return x.q > r.ack; }); guardar(); }
+    }).catch(function (e) { ERRSRV = e.message; if (/cerrado/i.test(e.message)) ESTADO = 'CERRADO'; })
+      .then(function () { syncing = false; estadoPill(); if (Q.length && ESTADO === 'EN CURSO' && !ERRSRV) setTimeout(sync, 400); });
+  }
+  function estadoPill() {
+    var p = $('sp'); if (!p) return;
+    if (ESTADO === 'PAUSADO') { p.className = 'pill p-pau'; p.textContent = '⏸ Pausado · ' + Q.length + ' guardados'; }
+    else if (ESTADO === 'CERRADO') { p.className = 'pill p-off'; p.textContent = '🏁 Cerrado'; }
+    else if (!navigator.onLine) { p.className = 'pill p-off'; p.textContent = '📴 Sin señal · ' + Q.length + ' guardados'; }
+    else if (Q.length) { p.className = 'pill p-wait'; p.textContent = '⏳ ' + Q.length + ' por enviar'; }
+    else { p.className = 'pill p-ok'; p.textContent = '✔ Todo enviado'; }
+    var e = $('est'); if (e) e.innerHTML = ESTADO === 'PAUSADO' ? '<div class="banner" style="background:#3d2a6b">⏸ El coordinador pausó el inventario. Puedes seguir escaneando: se guarda en el teléfono y se envía al reanudar.</div>'
+      : ESTADO === 'CERRADO' ? '<div class="banner" style="background:#5b1622">🏁 El inventario fue cerrado.' + (Q.length ? ' Quedaron ' + Q.length + ' escaneos sin enviar: avisa al coordinador.' : '') + '</div>'
+      : (ERRSRV && Q.length ? '<div class="banner" style="background:#5a4206">⚠ ' + esc(ERRSRV) + ' · se reintentará solo</div>' : '');
+  }
+  setInterval(function () { if (ESTADO === 'PAUSADO' && INV) api('join').then(function (r) { ESTADO = r.inv.estado; estadoPill(); if (ESTADO === 'EN CURSO') sync(); }).catch(function () {}); else sync(); }, 8000);
+  window.addEventListener('online', function () { estadoPill(); sync(); });
+  window.addEventListener('offline', estadoPill);
+  window.addEventListener('beforeunload', function (e) { if (Q.length) { e.preventDefault(); e.returnValue = ''; } });
+
+  /* ---------- cámara ---------- */
+  function camara(cb) {
+    if (typeof Html5Qrcode === 'undefined') { alert('No cargó el lector. Revisa internet y vuelve a abrir.'); return; }
+    var F = Html5QrcodeSupportedFormats;
+    scanner = scanner || new Html5Qrcode('reader', { formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.CODE_93, F.ITF, F.QR_CODE], experimentalFeatures: { useBarCodeDetectorIfSupported: true }, verbose: false });
+    scanner.start({ facingMode: 'environment' }, { fps: 12, qrbox: function (w, h) { return { width: Math.floor(w * .88), height: Math.floor(Math.min(h * .5, 180)) }; }, aspectRatio: 1.6 },
+      function (t) { cb(t); }, function () {})
+      .then(function () { scanner._on = true; })
+      .catch(function (e) { alert('No se pudo abrir la cámara: ' + e); var b = $('cam'); if (b) { b.textContent = '▶ Empezar a escanear'; b.className = 'big g'; } });
+  }
+  function pararCam() { if (scanner && scanner._on) { scanner._on = false; scanner.stop().catch(function () {}); } }
+
+  /* ---------- modo demo (para practicar sin tocar Artemis) ---------- */
+  function demoApi(a, x) {
+    return new Promise(function (ok) { setTimeout(function () {
+      if (a === 'join') return ok({ ok: true, inv: { id: 'DEMO', lugar: 'DEMO', nlugar: 'Tienda de práctica', estado: 'EN CURSO', tipo: 'TOTAL', equipo: ['Vendedor 1', 'Vendedor 2'] } });
+      if (a === 'cat') return ok({ ok: true, cat: JSON.stringify({ v: 1, ubics: ['F1-01', 'F2-01', 'J2-02'], rows: [
+        ['259171', '2591711', '4057286697253', 'AQ1703', '0', '0', '7', 'ADILETTE SHOWER', 'ADIDAS', 'Sandalias'],
+        ['327807', '3278079', '4060509397328', 'F35539', '0', '0', '7', 'ADILETTE AQUA', 'ADIDAS', 'Sandalias'],
+        ['327806', '3278062', '4060509396727', 'F35543', '0', '0', '7', 'ADILETTE AQUA', 'ADIDAS', 'Sandalias'],
+        ['327805', '3278055', '4060509396697', 'F35543', '0', '0', '8', 'ADILETTE AQUA', 'ADIDAS', 'Sandalias'],
+        ['310845', '3108451', '4064037145970', 'FY8072', '0', '0', '11K', 'SAND ADILETTE AQUA K', 'ADIDAS', 'Sandalias']] }) });
+      if (a === 'push') { var mx = 0; (x.items || []).forEach(function (i) { mx = Math.max(mx, i.q); }); return ok({ ok: true, ack: mx, estado: 'EN CURSO' }); }
+      if (a === 'fotos') return ok({ ok: true, fotos: {} });
+      ok({ ok: true });
+    }, 300); });
+  }
+
+  inicio();
 })();
 </script>
 </body>

@@ -61,7 +61,7 @@
   if (P.get('s')) LS('aud_s', P.get('s'));
   var DEV = LS('aud_dev'); if (!DEV) { DEV = 'D' + Math.random().toString(36).slice(2, 10); LS('aud_dev', DEV); }
   var SEQ = Number(LS('aud_seq') || 0);
-  var INV = null, USER = '', CAT = [], IDX = {}, MC = {}, UBICS = [], UB = '', Q = [], HIST = [], CNT = { tot: 0, ub: {} }, LAST = { c: '', t: 0 }, FOT = {}, scanner = null, actx = null, syncing = false, ESTADO = '', ERRSRV = '';
+  var INV = null, USER = '', CAT = [], IDX = {}, MC = {}, UBICS = [], UB = '', Q = [], HIST = [], CNT = { tot: 0, ub: {} }, LAST = { c: '', t: 0 }, FOT = {}, FASE = '', CATF2 = false, UASK = {}, ZONAS = ['VITRINA', 'PARED', 'MESA', 'ISLA', 'MOSTRADOR', 'ESCAPARATE'], scanner = null, actx = null, syncing = false, ESTADO = '', ERRSRV = '';
   var $ = function (id) { return document.getElementById(id); };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var sin0 = function (c) { return String(c == null ? '' : c).trim().replace(/^0+(?=.)/, ''); };
@@ -73,13 +73,24 @@
   function idb() { return new Promise(function (ok, ko) { if (DB) return ok(DB); var r = indexedDB.open('artemis_aud', 1); r.onupgradeneeded = function () { r.result.createObjectStore('kv'); }; r.onsuccess = function () { DB = r.result; ok(DB); }; r.onerror = function () { ko(r.error); }; }); }
   function iget(k) { return idb().then(function (db) { return new Promise(function (ok) { var t = db.transaction('kv').objectStore('kv').get(k); t.onsuccess = function () { ok(t.result); }; t.onerror = function () { ok(null); }; }); }).catch(function () { return null; }); }
   function iset(k, v) { return idb().then(function (db) { return new Promise(function (ok) { var t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = function () { ok(true); }; t.onerror = function () { ok(false); }; }); }).catch(function () { return false; }); }
-  function guardar() { LS(K('q'), JSON.stringify(Q)); LS(K('h'), JSON.stringify(HIST.slice(-60))); LS(K('c'), JSON.stringify(CNT)); LS(K('ub'), UB); LS('aud_seq', String(SEQ)); }
+  function guardar() { LS(K('q'), JSON.stringify(Q)); LS(K('h'), JSON.stringify(HIST.slice(-60))); LS(K('c'), JSON.stringify(CNT)); LS(K('ub'), UB); LS(K('fase'), FASE); LS('aud_seq', String(SEQ)); }
   function recuperar() {
     try { Q = JSON.parse(LS(K('q')) || '[]'); } catch (e) { Q = []; }
     try { HIST = JSON.parse(LS(K('h')) || '[]'); } catch (e) { HIST = []; }
     try { CNT = JSON.parse(LS(K('c')) || '{"tot":0,"ub":{}}'); } catch (e) { CNT = { tot: 0, ub: {} }; }
-    UB = LS(K('ub')) || ''; USER = LS(K('u')) || '';
+    UB = LS(K('ub')) || ''; USER = LS(K('u')) || ''; FASE = LS(K('fase')) || '';
+    try { UASK = JSON.parse(LS(K('ua')) || '{}'); } catch (e) { UASK = {}; }
   }
+  var ALMACEN = function () { return INV && (INV.lugar === 'PRI_DPAF' || INV.lugar === 'TARPRI'); };
+  /* v81: fase sala de ventas (muestras, no suman) o almacén (cajas, sí suman). */
+  function elegirFase() {
+    pararCam();
+    pantalla('<div class="wrap"><div class="card"><h2 style="margin-top:0">¿Qué vas a contar?</h2><div class="mut" style="margin-bottom:12px">Primero la sala de ventas (muestras) y después el almacén (cajas).</div>' +
+      '<button class="big g" id="fs" style="margin-bottom:10px">🏪 Sala de ventas · muestras</button><div class="mut" style="margin:-4px 0 14px">Escanea cada muestra exhibida. No suma al stock: sirve para saber qué está exhibido.</div>' +
+      '<button class="big o" id="fa">📦 Almacén · cajas</button><div class="mut" style="margin-top:6px">Escanea cada caja o prenda por anaquel. Esto sí es el conteo.</div></div></div>');
+    $('fs').onclick = function () { fijarFase('S'); }; $('fa').onclick = function () { fijarFase('A'); };
+  }
+  function fijarFase(f) { FASE = f; UB = ''; guardar(); principal(); }
 
   /* ---------- servidor ---------- */
   function api(a, extra) {
@@ -136,21 +147,26 @@
     });
   }
   function usarCat(c) {
+    CATF2 = c.f === 2; if (!FASE && ALMACEN()) FASE = 'A';
     CAT = c.rows; UBICS = c.ubics || []; IDX = {}; MC = {};
     CAT.forEach(function (r, i) {
       [r[0], r[1], r[2]].forEach(function (k) { if (k && IDX[k] == null) IDX[k] = i; });
       var mc = (r[3] + '-' + r[4]).toUpperCase(); (MC[mc] = MC[mc] || []).push(i);
     });
+    if (!FASE) return elegirFase();
     principal();
   }
 
   /* ---------- pantalla principal ---------- */
   function principal() {
-    pantalla('<div class="top"><b>📦 ' + esc(INV.nlugar) + ' · ' + esc(USER) + '</b><span class="pill p-ok" id="sp">✔</span></div><div class="wrap">' +
+    var S = FASE === 'S';
+    pantalla('<div class="top"><b>' + (S ? '🏪 ' : '📦 ') + esc(INV.nlugar) + ' · ' + esc(USER) + '</b><span class="pill p-ok" id="sp">✔</span></div><div class="wrap">' +
+      '<div class="banner" style="background:' + (S ? '#3d2a6b' : '#0b3a5c') + ';display:flex;justify-content:space-between;align-items:center;gap:8px"><span>' + (S ? '🏪 SALA DE VENTAS · muestras (no suman)' : '📦 ALMACÉN · cajas (conteo)') + '</span><a href="#" id="cfase" style="color:#9fd8ff;font-size:13px;white-space:nowrap">cambiar</a></div>' +
       '<div id="est"></div><div id="ubx"></div><div id="reader"></div><button class="big g" id="cam" style="margin:10px 0">▶ Empezar a escanear</button>' +
       '<div class="res" id="res"><div class="mut" style="width:100%;text-align:center">El producto escaneado aparece aquí con su foto</div></div>' +
-      '<div class="cnt"><div><b id="cub">0</b><span>En este anaquel</span></div><div><b id="ctot">0</b><span>Mis unidades</span></div></div>' +
-      '<div class="acts"><button id="bman">⌨ Digitar</button><button id="bdes">↩ Deshacer último</button><button id="bub">📍 Cambiar ubicación</button><button class="fin" id="bfin">✅ Terminé este anaquel</button></div>' +
+      '<div class="cnt"><div><b id="cub">0</b><span>' + (S ? 'En esta zona' : 'En este anaquel') + '</span></div><div><b id="ctot">0</b><span>' + (S ? 'Mis muestras' : 'Mis unidades') + '</span></div></div>' +
+      '<div class="acts"><button id="bman">⌨ Digitar</button><button id="bdes">↩ Deshacer último</button><button id="bub">📍 ' + (S ? 'Cambiar zona' : 'Cambiar ubicación') + '</button><button class="fin" id="bfin">✅ ' + (S ? 'Terminé esta zona' : 'Terminé este anaquel') + '</button></div>' +
+      (S ? '<button class="big" id="bsala" style="margin-top:10px;background:linear-gradient(#7b52d6,#5a35b0)">🏁 Terminé la sala de ventas → pasar al almacén</button>' : '') +
       '<div style="display:flex;gap:8px;margin-top:10px"><input class="in" id="kb" placeholder="Pistola Bluetooth o escribe el código" inputmode="text" autocomplete="off"><button class="big o" style="width:auto;padding:0 16px" id="kbok">OK</button></div>' +
       '<div class="card" style="margin-top:12px"><b>🕘 Mis últimos escaneos</b><div class="list" id="hist"></div></div>' +
       '<div class="mut" style="text-align:center;margin:10px 0 30px">' + esc(INV.id) + ' · <a href="#" id="salir" style="color:#8fb0d8">cambiar de persona</a></div></div>');
@@ -160,19 +176,25 @@
       this.textContent = '⏸ Pausar cámara'; this.className = 'big o'; camara(onCode);
     };
     $('bman').onclick = manual; $('bdes').onclick = deshacer; $('bub').onclick = elegirUb; $('bfin').onclick = finUb;
+    $('cfase').onclick = function (e) { e.preventDefault(); elegirFase(); }; if ($('bsala')) $('bsala').onclick = finSala;
     $('kbok').onclick = function () { var v = $('kb').value.trim(); $('kb').value = ''; if (v) { LAST.c = ''; onCode(v); } };
     $('kb').onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); $('kbok').onclick(); } };
     $('salir').onclick = function (e) { e.preventDefault(); if (confirm('¿Cambiar de persona en este teléfono?')) { LS(K('u'), null); USER = ''; pararCam(); elegirNombre(); } };
     pintaUb(); pintaCnt(); pintaHist(); estadoPill();
   }
   function pintaUb() {
+    if (FASE === 'S' && !UB) {
+      $('ubx').innerHTML = '<div class="ub no">📍 Elige la zona de la sala (o escanea su etiqueta)</div><div class="acts" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:10px">' +
+        ZONAS.map(function (z) { return '<button data-z="' + z + '">' + z + '</button>'; }).join('') + '</div>';
+      document.querySelectorAll('[data-z]').forEach(function (b) { b.onclick = function () { fijarUb('SALA-' + b.dataset.z); }; }); return;
+    }
     $('ubx').innerHTML = UB ? '<div class="ub"><span>📍</span><div>' + esc(UB) + '<small>Ubicación actual · escanea otra etiqueta para cambiar</small></div></div>'
       : '<div class="ub no">📍 Escanea la etiqueta del anaquel para empezar</div>';
   }
-  function pintaCnt() { $('cub').textContent = UB ? (CNT.ub[UB] || 0) : 0; $('ctot').textContent = CNT.tot; }
+  function pintaCnt() { $('cub').textContent = UB ? (CNT.ub[UB] || 0) : 0; $('ctot').textContent = FASE === 'S' ? (CNT.s || 0) : CNT.tot; }
   function pintaHist() {
     $('hist').innerHTML = HIST.slice(-8).reverse().map(function (h) {
-      return '<div class="' + (h.x ? 'x' : '') + '"><span>' + (h.m === 'X' ? '❓ ' : h.m === 'M' ? '⌨ ' : '') + esc(h.d) + '</span><span class="mut">' + esc(h.u) + ' · ' + new Date(h.t).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) + '</span></div>';
+      return '<div class="' + (h.x ? 'x' : '') + '"><span>' + (h.m === 'X' ? '❓ ' : h.m === 'M' ? '⌨ ' : h.m === 'S' ? '🏪 ' : '') + esc(h.d) + '</span><span class="mut">' + esc(h.u) + ' · ' + new Date(h.t).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) + '</span></div>';
     }).join('') || '<div class="mut">Aún nada</div>';
   }
   function feedback(tipo) {
@@ -194,7 +216,7 @@
     if (ESTADO === 'CERRADO' || ESTADO === 'ANULADO') { mostrar('bad', '<h2>🏁 Inventario ' + (ESTADO === 'ANULADO' ? 'anulado' : 'cerrado') + '</h2>'); feedback('bad'); return; }
     var i = buscar(t);
     if (i >= 0) {
-      if (!UB) { mostrar('warn', '<h2>📍 Primero escanea el anaquel</h2><div class="mut">Así sabemos dónde está cada producto.</div>'); feedback('warn'); return; }
+      if (!UB) { mostrar('warn', '<h2>📍 Primero ' + (FASE === 'S' ? 'elige la zona' : 'escanea el anaquel') + '</h2><div class="mut">Así sabemos dónde está cada producto.</div>'); feedback('warn'); return; }
       agregar(i, 1, 'E', t); return;
     }
     if (/[A-Za-z]/.test(t) && t.length <= 40) { fijarUb(t.toUpperCase()); return; }
@@ -203,13 +225,49 @@
   }
   function encolar(it) { it.q = ++SEQ; it.t = Date.now(); it.u = UB; Q.push(it); }
   function agregar(i, n, modo, leido) {
-    var r = CAT[i], mc = (r[3] + '-' + r[4]).toUpperCase();
+    var r = CAT[i], mc = (r[3] + '-' + r[4]).toUpperCase(), dig = modo === 'M';
+    if (FASE === 'S') modo = 'S';
     encolar({ l: leido || r[0], c: r[0], n: n, m: modo });
-    CNT.tot += n; CNT.ub[UB] = (CNT.ub[UB] || 0) + n;
-    HIST.push({ q: SEQ, t: Date.now(), c: r[0], u: UB, m: modo, n: n, d: r[3] + '-' + r[4] + ' · T' + r[6] });
+    if (modo === 'S') CNT.s = (CNT.s || 0) + n; else CNT.tot += n; CNT.ub[UB] = (CNT.ub[UB] || 0) + n;
+    var H = { q: SEQ, t: Date.now(), c: r[0], l: leido || r[0], u: UB, m: modo, n: n, d: r[3] + '-' + r[4] + ' · T' + r[6] }; HIST.push(H);
     guardar(); pintaCnt(); pintaHist();
-    mostrar('ok', '<h2>' + esc(r[3]) + ' <span style="color:#4fc3ff">' + esc(r[4]) + '</span></h2><div>' + esc(r[7]) + '</div><div class="mut">' + esc(r[5]) + ' · ' + esc(r[8]) + '</div><span class="t">T ' + esc(r[6]) + '</span>' + (modo === 'M' ? ' <span class="pill p-wait">digitado</span>' : ''), FOT[mc] === undefined ? NOFOTO : FOT[mc]);
-    feedback('ok'); foto(mc); syncPronto();
+    var noF = CATF2 && r[11] !== 1, us = String(r[10] || ''), fue = !noF && FASE === 'A' && CATF2 && us && UBICS.indexOf(UB) >= 0 && us.split('|').indexOf(UB) < 0 && !UASK[r[0] + '|' + UB];
+    mostrar(noF || fue ? 'warn' : 'ok', '<h2>' + esc(r[3]) + ' <span style="color:#4fc3ff">' + esc(r[4]) + '</span></h2><div>' + esc(r[7]) + '</div><div class="mut">' + esc(r[5]) + ' · ' + esc(r[8]) + '</div><span class="t">T ' + esc(r[6]) + '</span>' + (dig ? ' <span class="pill p-wait">digitado</span>' : '') +
+      (noF ? '<div style="margin-top:8px;font-weight:800;color:#ffd36b">⚠ Este código no figura en el stock de este local. Abre la caja y confirma que es este producto.</div>' : '') +
+      (fue ? '<div style="margin-top:8px;font-weight:800;color:#ffd36b">📍 En el sistema está en ' + esc(us.split('|').join(', ')) + '</div><div style="display:flex;gap:6px;margin-top:6px"><button class="big o" style="padding:8px;font-size:14px" id="umv">📦 Lo muevo allá</button><button class="big o" style="padding:8px;font-size:14px" id="uqd">Se queda aquí</button></div>' : '') +
+      '<button class="big o" style="margin-top:8px;padding:8px;font-size:14px;border-color:#ff7d8c" id="noes">❌ No es este producto</button>', FOT[mc] === undefined ? NOFOTO : FOT[mc]);
+    feedback(noF || fue ? 'warn' : 'ok'); foto(mc); syncPronto();
+    $('noes').onclick = function () { noEs(H); };
+    if (fue) { var dec = function (d) { UASK[r[0] + '|' + UB] = d; LS(K('ua'), JSON.stringify(UASK)); encolar({ l: d, c: r[0], n: 0, m: 'U' }); guardar(); syncPronto();
+      mostrar('ok', '<h2>' + (d === 'MOVER' ? '📦 Anotado: lo mueves a ' + esc(us.split('|')[0]) : '📍 Anotado: se queda en ' + esc(UB)) + '</h2><div class="mut">' + esc(r[3] + '-' + r[4] + ' · T' + r[6]) + '</div>'); };
+      $('umv').onclick = function () { dec('MOVER'); }; $('uqd').onclick = function () { dec('QUEDA'); }; }
+  }
+  /* ❌ etiqueta equivocada: resta el escaneo, lo marca y abre Digitar para elegir el correcto. */
+  function noEs(h) {
+    if (h.x) return; if (!confirm('¿La etiqueta no corresponde al producto? Se resta este escaneo y queda marcado para revisión. Luego digita el producto correcto.')) return;
+    var g = UB; UB = h.u;
+    encolar({ l: h.l || h.c, c: h.c, n: -1, m: h.m === 'S' ? 'S' : 'D' }); encolar({ l: h.l || h.c, c: h.c, n: 0, m: 'N' });
+    UB = g; h.x = true; if (h.m === 'S') CNT.s = (CNT.s || 1) - 1; else CNT.tot -= 1; CNT.ub[h.u] = (CNT.ub[h.u] || 1) - 1;
+    guardar(); pintaCnt(); pintaHist(); syncPronto(); manual();
+  }
+  /* 🏁 fin de la sala: aviso obligatorio de modelos con stock que nadie escaneó como muestra. */
+  function finSala() {
+    if (!confirm('¿Terminaste toda la sala de ventas?')) return;
+    pararCam();
+    var m = document.createElement('div'); m.className = 'modal'; document.body.appendChild(m);
+    m.innerHTML = '<div><h2 style="margin-top:0">⏳ Revisando lo exhibido…</h2><div class="mut" id="sxm">Enviando tus escaneos.</div></div>';
+    var n = 0, pide = function () {
+      if (Q.length && n++ < 30) { sync(); setTimeout(pide, 700); return; }
+      if (Q.length) { $('sxm').innerHTML = 'No hay señal para enviar los escaneos. Acércate al wifi y reintenta.<br><br><button class="big" id="sxr">Reintentar</button> <button class="big o" id="sxc" style="margin-top:8px">Volver</button>'; $('sxr').onclick = function () { n = 0; pide(); }; $('sxc').onclick = function () { m.remove(); principal(); }; return; }
+      api('sinexh').then(function (r) {
+        m.innerHTML = '<div><h2 style="margin-top:0">👀 ' + r.n + ' modelo' + (r.n === 1 ? '' : 's') + ' con stock sin exhibir</h2><div class="mut">Tienen stock en el sistema pero nadie escaneó su muestra. Revisa si deberían estar en la sala.</div><div class="list" style="max-height:52vh;overflow:auto;margin:10px 0">' +
+          (r.l || []).map(function (x) { return '<div><span><b>' + esc(x[0] + '-' + x[1]) + '</b> ' + esc(x[3]) + '</span><span class="mut">' + esc(x[2] || x[4]) + '</span></div>'; }).join('') + (r.n > (r.l || []).length ? '<div class="mut">… y ' + (r.n - r.l.length) + ' más (los ve el coordinador)</div>' : '') +
+          '</div><button class="big g" id="sxok">✔ Entendido · pasar al almacén</button><button class="big o" id="sxv" style="margin-top:8px">Volver a la sala</button></div>';
+        $('sxok').onclick = function () { encolar({ l: 'SALA', c: '', n: r.n, m: 'K' }); FASE = 'A'; UB = ''; guardar(); syncPronto(); m.remove(); principal(); };
+        $('sxv').onclick = function () { m.remove(); principal(); };
+      }).catch(function (e) { $('sxm').innerHTML = '❌ ' + esc(e.message) + '<br><br><button class="big" id="sxr">Reintentar</button>'; $('sxr').onclick = function () { n = 0; pide(); }; });
+    };
+    pide();
   }
   function desconocido(t) {
     encolar({ l: t, c: '', n: 1, m: 'X' });
@@ -221,7 +279,7 @@
   }
   function fijarUb(u) {
     if (UB === u) { mostrar('warn', '<h2>📍 Ya estás en ' + esc(u) + '</h2>'); return; }
-    var conocido = !UBICS.length || UBICS.indexOf(u) >= 0;
+    var conocido = !UBICS.length || UBICS.indexOf(u) >= 0 || /^SALA-/.test(u);
     UB = u; guardar(); pintaUb(); pintaCnt();
     mostrar(conocido ? 'ok' : 'warn', '<h2>📍 Ubicación: ' + esc(u) + '</h2><div class="mut">' + (conocido ? 'Ahora escanea los productos de este anaquel.' : 'Esta ubicación no figura en el sistema. Revisa que la etiqueta sea correcta.') + '</div>');
     feedback(conocido ? 'ok' : 'warn');
@@ -237,8 +295,8 @@
       var h = HIST[i]; if (h.x || h.n <= 0) continue;
       if (!confirm('¿Deshacer: ' + h.d + ' (' + h.u + ')?')) return;
       var guardaUb = UB; UB = h.u;
-      encolar({ l: h.l || h.c, c: h.c, n: -1, m: h.m === 'X' ? 'X' : 'D' });
-      UB = guardaUb; h.x = true; CNT.tot -= 1; CNT.ub[h.u] = (CNT.ub[h.u] || 1) - 1;
+      encolar({ l: h.l || h.c, c: h.c, n: -1, m: h.m === 'X' ? 'X' : h.m === 'S' ? 'S' : 'D' });
+      UB = guardaUb; h.x = true; if (h.m === 'S') CNT.s = (CNT.s || 1) - 1; else CNT.tot -= 1; CNT.ub[h.u] = (CNT.ub[h.u] || 1) - 1;
       guardar(); pintaCnt(); pintaHist(); mostrar('warn', '<h2>↩ Deshecho</h2><div>' + esc(h.d) + '</div>'); syncPronto(); return;
     }
     alert('No hay nada para deshacer');
@@ -338,12 +396,13 @@
   function demoApi(a, x) {
     return new Promise(function (ok) { setTimeout(function () {
       if (a === 'join') return ok({ ok: true, inv: { id: 'DEMO', lugar: 'DEMO', nlugar: 'Tienda de práctica', estado: 'EN CURSO', tipo: 'TOTAL', equipo: ['Vendedor 1', 'Vendedor 2'] } });
-      if (a === 'cat') return ok({ ok: true, cat: JSON.stringify({ v: 1, ubics: ['F1-01', 'F2-01', 'J2-02'], rows: [
-        ['259171', '2591711', '4057286697253', 'AQ1703', '0', '0', '7', 'ADILETTE SHOWER', 'ADIDAS', 'Sandalias'],
-        ['327807', '3278079', '4060509397328', 'F35539', '0', '0', '7', 'ADILETTE AQUA', 'ADIDAS', 'Sandalias'],
-        ['327806', '3278062', '4060509396727', 'F35543', '0', '0', '7', 'ADILETTE AQUA', 'ADIDAS', 'Sandalias'],
-        ['327805', '3278055', '4060509396697', 'F35543', '0', '0', '8', 'ADILETTE AQUA', 'ADIDAS', 'Sandalias'],
-        ['310845', '3108451', '4064037145970', 'FY8072', '0', '0', '11K', 'SAND ADILETTE AQUA K', 'ADIDAS', 'Sandalias']] }) });
+      if (a === 'cat') return ok({ ok: true, cat: JSON.stringify({ v: 1, f: 2, ubics: ['F1-01', 'F2-01', 'J2-02'], rows: [
+        ['259171', '2591711', '4057286697253', 'AQ1703', '0', '0', '7', 'ADILETTE SHOWER', 'ADIDAS', 'Sandalias', 'F1-01', 1],
+        ['327807', '3278079', '4060509397328', 'F35539', '0', '0', '7', 'ADILETTE AQUA', 'ADIDAS', 'Sandalias', 'F2-01', 1],
+        ['327806', '3278062', '4060509396727', 'F35543', '0', '0', '7', 'ADILETTE AQUA', 'ADIDAS', 'Sandalias', 'F2-01', 1],
+        ['327805', '3278055', '4060509396697', 'F35543', '0', '0', '8', 'ADILETTE AQUA', 'ADIDAS', 'Sandalias', 'F2-01', 1],
+        ['310845', '3108451', '4064037145970', 'FY8072', '0', '0', '11K', 'SAND ADILETTE AQUA K', 'ADIDAS', 'Sandalias', '', 0]] }) });
+      if (a === 'sinexh') return ok({ ok: true, n: 2, l: [['F35539', '0', 'NEGRO', 'ADILETTE AQUA', 'ADIDAS'], ['FY8072', '0', '', 'SAND ADILETTE AQUA K', 'ADIDAS']] });
       if (a === 'push') { var mx = 0; (x.items || []).forEach(function (i) { mx = Math.max(mx, i.q); }); return ok({ ok: true, ack: mx, estado: 'EN CURSO' }); }
       if (a === 'fotos') return ok({ ok: true, fotos: {} });
       ok({ ok: true });

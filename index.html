@@ -22,6 +22,8 @@
   .ub small{font-size:12px;font-weight:600;color:#8fb0d8;display:block;letter-spacing:0}
   #reader{width:100%;border-radius:16px;overflow:hidden;background:#000;min-height:40px}
   #reader video{object-fit:cover}
+  .zbar{display:flex;gap:8px;margin:8px 0 2px}.zbar button{flex:1;padding:10px 4px;border-radius:12px;border:1px solid rgba(120,180,255,.4);background:rgba(255,255,255,.07);color:#fff;font-weight:800;font-size:15px}.zbar button.on{background:#ffd36b;color:#04122a}.zbar span{align-self:center;min-width:46px;text-align:center;font-weight:800;color:#8fb0d8;font-size:13px}
+  .okh{font-size:15px;font-weight:900;color:#3ddc84;letter-spacing:.3px;margin-bottom:2px}
   .res{display:flex;gap:12px;align-items:center;border-radius:18px;padding:12px;border:2px solid rgba(120,180,255,.25);background:rgba(255,255,255,.05);transition:background .2s,border-color .2s;min-height:120px}
   .res img{width:110px;height:110px;object-fit:contain;border-radius:12px;background:#fff;flex:none}
   .res.ok{background:rgba(37,184,103,.25);border-color:#3ddc84}.res.bad{background:rgba(224,71,90,.28);border-color:#ff7d8c}.res.warn{background:rgba(241,181,58,.22);border-color:#ffd36b}
@@ -61,7 +63,7 @@
   if (P.get('s')) LS('aud_s', P.get('s'));
   var DEV = LS('aud_dev'); if (!DEV) { DEV = 'D' + Math.random().toString(36).slice(2, 10); LS('aud_dev', DEV); }
   var SEQ = Number(LS('aud_seq') || 0);
-  var INV = null, USER = '', CAT = [], IDX = {}, MC = {}, UBICS = [], UB = '', Q = [], HIST = [], CNT = { tot: 0, ub: {} }, LAST = { c: '', t: 0 }, FOT = {}, FASE = '', CATF2 = false, UASK = {}, MS = {}, PASK = {}, RC = null, RCI = null, ZONAS = ['VITRINA', 'PARED', 'MESA', 'ISLA', 'MOSTRADOR', 'ESCAPARATE'], scanner = null, actx = null, syncing = false, ESTADO = '', ERRSRV = '';
+  var INV = null, USER = '', CAT = [], IDX = {}, MC = {}, UBICS = [], UB = '', Q = [], HIST = [], CNT = { tot: 0, ub: {} }, LAST = { c: '', t: 0 }, FOT = {}, FASE = '', CATF2 = false, UASK = {}, MS = {}, PASK = {}, RC = null, RCI = null, IDX2 = {}, MX = {}, MT = {}, LACC = 0, ZONAS = ['VITRINA', 'PARED', 'MESA', 'ISLA', 'MOSTRADOR', 'ESCAPARATE'], scanner = null, actx = null, syncing = false, ESTADO = '', ERRSRV = '';
   var $ = function (id) { return document.getElementById(id); };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var sin0 = function (c) { return String(c == null ? '' : c).trim().replace(/^0+(?=.)/, ''); };
@@ -102,7 +104,7 @@
   }
 
   /* ---------- pantallas ---------- */
-  function pantalla(h) { $('app').innerHTML = (DEMO ? '<div class="demo">MODO DEMO · nada se envía a Artemis</div>' : '') + h; }
+  function pantalla(h) { $('app').innerHTML = (DEMO ? '<div class="demo">MODO DEMO · nada se envía a Artemis</div>' : '') + (INV && INV.tipo === 'PRUEBA' ? '<div class="demo" style="background:#7a4b00">🧪 MODO PRUEBA · se muestran cantidades · no cuenta para ninguna tienda</div>' : '') + h; }
   function inicio() {
     recuperar();
     if (!TOKEN) return sinCodigo();
@@ -119,7 +121,7 @@
     pantalla('<div class="wrap"><div class="card"><h2 style="margin-top:0">📱 Artemis · Escáner</h2><div class="mut" style="margin-bottom:12px">Escanea el código QR del inventario que muestra la pantalla del coordinador.</div><div id="reader"></div><br><button class="big" id="qs">📷 Escanear QR</button></div></div>');
     $('qs').onclick = function () {
       this.style.display = 'none';
-      camara(function (t) { var m = String(t).match(/[?&]s=([\w-]{16,})/); if (m) { pararCam(); LS('aud_s', m[1]); TOKEN = m[1]; inicio(); } });
+      camara(function (t) { var m = String(t).match(/[?&]s=([\w-]{16,})/); if (m) { pararCam(); LS('aud_s', m[1]); TOKEN = m[1]; inicio(); } }, true);
     };
   }
   function paso2() {
@@ -149,9 +151,9 @@
   }
   function usarCat(c) {
     CATF2 = c.f === 2; if (!FASE && (ALMACEN() || INV.tipo === 'SORPRESA')) FASE = 'A';
-    CAT = c.rows; UBICS = c.ubics || []; IDX = {}; MC = {};
+    CAT = c.rows; UBICS = c.ubics || []; IDX = {}; IDX2 = {}; MC = {}; MX = c.mx || {};
     CAT.forEach(function (r, i) {
-      [r[0], r[1], r[2]].forEach(function (k) { if (k && IDX[k] == null) IDX[k] = i; });
+      [r[0], r[1], r[2]].forEach(function (k) { if (!k) return; var a = nk(k); if (IDX[k] == null) IDX[k] = i; if (a && IDX[a] == null) IDX[a] = i; if (/^\d{7,14}$/.test(a) && IDX2[a.slice(0, -1)] == null) IDX2[a.slice(0, -1)] = i; });
       var mc = (r[3] + '-' + r[4]).toUpperCase(); (MC[mc] = MC[mc] || []).push(i);
     });
     if (!FASE) return elegirFase();
@@ -214,17 +216,26 @@
   }
 
   /* ---------- escaneo ---------- */
-  function buscar(t) { var k = sin0(t); return IDX[k] != null ? IDX[k] : (IDX[t] != null ? IDX[t] : -1); }
+  /* v91: códigos más robustos — sin espacios, guiones ni asteriscos, sin ceros adelante; prueba también sin el dígito verificador final */
+  function nk(c) { return sin0(String(c == null ? '' : c).toUpperCase().replace(/[\s*\-]/g, '')); }
+  function buscar(t) {
+    var k = nk(t); if (IDX[k] != null) return IDX[k]; if (IDX[t] != null) return IDX[t];
+    /* dígito verificador GS1: el lector trae uno que Artemis no tiene, o al revés (solo si el dígito es el correcto) */
+    if (/^\d{7,14}$/.test(k)) { var k2 = k.slice(0, -1); if (IDX[k2] != null && dv(k2) === k.slice(-1)) return IDX[k2]; if (IDX2[k] != null && nk(CAT[IDX2[k]][0]) === k + dv(k) || IDX2[k] != null && nk(CAT[IDX2[k]][1]) === k + dv(k) || IDX2[k] != null && nk(CAT[IDX2[k]][2]) === k + dv(k)) return IDX2[k]; }
+    return -1;
+  }
+  function dv(d) { var s = 0; for (var i = d.length - 1, w = 3; i >= 0; i--, w = 4 - w) s += Number(d[i]) * w; return String((10 - s % 10) % 10); }
   function onCode(raw) {
     var t = String(raw || '').trim(); if (!t) return;
-    var now = Date.now(); if (t === LAST.c && now - LAST.t < 1500) return; LAST = { c: t, t: now };
+    var now = Date.now(); if (t === LAST.c && now - LAST.t < 1800) { LAST.t = now; return; } if (now - LACC < 450) return; LAST = { c: t, t: now };
     if (/^https?:\/\//i.test(t)) return;
+    if ($('mdup')) return;
     if (ESTADO === 'CERRADO' || ESTADO === 'ANULADO') { mostrar('bad', '<h2>🏁 Inventario ' + (ESTADO === 'ANULADO' ? 'anulado' : 'cerrado') + '</h2>'); feedback('bad'); return; }
     var i = buscar(t);
     if (RCI) { recScan(i, t); return; }
     if (i >= 0) {
       if (!UB) { mostrar('warn', '<h2>📍 Primero ' + (FASE === 'S' ? 'elige la zona' : 'escanea el anaquel') + '</h2><div class="mut">Así sabemos dónde está cada producto.</div>'); feedback('warn'); return; }
-      agregar(i, 1, 'E', t); return;
+      LACC = now; agregar(i, 1, 'E', t); return;
     }
     if (/[A-Za-z]/.test(t) && t.length <= 40) { fijarUb(t.toUpperCase()); return; }
     if (!UB) { mostrar('warn', '<h2>📍 Primero escanea el anaquel</h2>'); feedback('warn'); return; }
@@ -234,20 +245,52 @@
   function agregar(i, n, modo, leido, ok) {
     var r = CAT[i], mc = (r[3] + '-' + r[4]).toUpperCase(), dig = modo === 'M';
     if (FASE === 'S') modo = 'S';
+    /* v91: en exhibición va 1 prenda por modelo; si ya hay muestra de este modelo se pide confirmar (por defecto no suma) */
+    if (modo === 'S' && n > 0 && !ok && (MC[mc] || []).some(function (j) { return MS[CAT[j][0]]; })) { preguntaMuestra(i, n, modo, leido, mc); return; }
+    var antes = totModelo(mc);
     encolar({ l: leido || r[0], c: r[0], n: n, m: modo });
     if (modo === 'S') { CNT.s = (CNT.s || 0) + n; if (n > 0) { MS[r[0]] = 1; LS(K('ms'), JSON.stringify(MS)); } } else CNT.tot += n; CNT.ub[UB] = (CNT.ub[UB] || 0) + n;
     var H = { q: SEQ, t: Date.now(), c: r[0], l: leido || r[0], u: UB, m: modo, n: n, d: r[3] + '-' + r[4] + ' · T' + r[6] }; HIST.push(H);
     guardar(); pintaCnt(); pintaHist();
+    var veces = 0; HIST.forEach(function (h) { if (h.c === r[0] && h.u === UB && !h.x) veces += h.n; });
+    var lleno = n > 0 && MX[mc] > 0 && antes >= MX[mc];
     var noF = CATF2 && r[11] !== 1, us = String(r[10] || ''), fue = !noF && FASE === 'A' && CATF2 && us && UBICS.indexOf(UB) >= 0 && us.split('|').indexOf(UB) < 0 && !UASK[r[0] + '|' + UB];
-    mostrar(noF || fue ? 'warn' : 'ok', '<h2>' + esc(r[3]) + ' <span style="color:#4fc3ff">' + esc(r[4]) + '</span></h2><div>' + esc(r[7]) + '</div><div class="mut">' + esc(r[5]) + ' · ' + esc(r[8]) + '</div><span class="t">T ' + esc(r[6]) + '</span>' + (dig ? ' <span class="pill p-wait">digitado</span>' : '') +
+    mostrar(noF || fue || lleno ? 'warn' : 'ok', '<div class="okh">✅ ' + (modo === 'S' ? 'Muestra agregada' : 'Código agregado') + (veces > 1 ? ' · ×' + veces + ' aquí' : '') + '</div><h2>' + esc(r[3]) + ' <span style="color:#4fc3ff">' + esc(r[4]) + '</span></h2><div>' + esc(r[7]) + '</div><div class="mut">' + esc(r[5]) + ' · ' + esc(r[8]) + '</div><span class="t">T ' + esc(r[6]) + '</span>' + (dig ? ' <span class="pill p-wait">digitado</span>' : '') +
+      (INV && INV.tipo === 'PRUEBA' ? '<div style="margin-top:6px;font-size:13px;font-weight:800;color:#ffd36b">🧪 Sistema: ' + (Number(r[12]) || 0) + ' und esta talla · ' + (MX[mc] || 0) + ' und el modelo · contado ' + (antes + n) + '</div>' : '') +
+      (lleno ? '<div style="margin-top:8px;font-weight:800;color:#ffd36b">⚠ Este modelo ya está completo según el sistema. Revisa las cajas: ¿es otra caja distinta?</div><div style="display:flex;gap:6px;margin-top:6px"><button class="big o" style="padding:8px;font-size:14px" id="llok">✔ Sí, es otra caja</button><button class="big o" style="padding:8px;font-size:14px;border-color:#ff7d8c" id="llno">↩ No, era repetida</button></div>' : '') +
       (noF ? '<div style="margin-top:8px;font-weight:800;color:#ffd36b">⚠ Este código no figura en el stock de este local. Abre la caja y confirma que es este producto.</div>' : '') +
       (fue ? '<div style="margin-top:8px;font-weight:800;color:#ffd36b">📍 En el sistema está en ' + esc(us.split('|').join(', ')) + '</div><div style="display:flex;gap:6px;margin-top:6px"><button class="big o" style="padding:8px;font-size:14px" id="umv">📦 Lo muevo allá</button><button class="big o" style="padding:8px;font-size:14px" id="uqd">Se queda aquí</button></div>' : '') +
       '<button class="big o" style="margin-top:8px;padding:8px;font-size:14px;border-color:#ff7d8c" id="noes">❌ No es este producto</button>', FOT[mc] === undefined ? NOFOTO : FOT[mc]);
-    feedback(noF || fue ? 'warn' : 'ok'); foto(mc); syncPronto();
+    feedback(noF || fue || lleno ? 'warn' : 'ok'); foto(mc); syncPronto();
     $('noes').onclick = function () { noEs(H); };
+    if (lleno) { $('llok').onclick = function () { mostrar('ok', '<div class="okh">✅ Anotado: es otra caja</div><div class="mut">' + esc(H.d) + '</div>'); }; $('llno').onclick = function () { quitarH(H); }; }
     if (fue) { var dec = function (d) { UASK[r[0] + '|' + UB] = d; LS(K('ua'), JSON.stringify(UASK)); encolar({ l: d, c: r[0], n: 0, m: 'U' }); guardar(); syncPronto();
       mostrar('ok', '<h2>' + (d === 'MOVER' ? '📦 Anotado: lo mueves a ' + esc(us.split('|')[0]) : '📍 Anotado: se queda en ' + esc(UB)) + '</h2><div class="mut">' + esc(r[3] + '-' + r[4] + ' · T' + r[6]) + '</div>'); };
       $('umv').onclick = function () { dec('MOVER'); }; $('uqd').onclick = function () { dec('QUEDA'); }; }
+  }
+  /* v91: total contado del modelo (todos los teléfonos según Artemis + lo de este celular aún sin enviar) */
+  function totModelo(mc) {
+    var ci = {}; (MC[mc] || []).forEach(function (j) { ci[CAT[j][0]] = CAT[j][11] === 1; });
+    if (MT[mc] == null) { var l = 0; HIST.forEach(function (h) { if (ci[h.c] != null && !h.x && 'EMS'.indexOf(h.m) >= 0) l += h.n; }); return l; }
+    var t = Number(MT[mc]) || 0;
+    Q.forEach(function (x) { if (ci[x.c] === true && 'EMSD'.indexOf(x.m) >= 0) t += Number(x.n) || 0; });
+    HIST.forEach(function (h) { if (ci[h.c] === false && !h.x && 'EMS'.indexOf(h.m) >= 0) t += h.n; });
+    return t;
+  }
+  function quitarH(h) {
+    if (h.x) return; var g = UB; UB = h.u;
+    encolar({ l: h.l || h.c, c: h.c, n: -1, m: h.m === 'S' ? 'S' : 'D' });
+    UB = g; h.x = true; if (h.m === 'S') CNT.s = (CNT.s || 1) - 1; else CNT.tot -= 1; CNT.ub[h.u] = (CNT.ub[h.u] || 1) - 1;
+    guardar(); pintaCnt(); pintaHist(); syncPronto(); mostrar('warn', '<h2>↩ Quitado</h2><div class="mut">' + esc(h.d) + ' · no se cuenta</div>'); feedback('warn');
+  }
+  function preguntaMuestra(i, n, modo, leido, mc) {
+    var r = CAT[i], m = document.createElement('div'); m.className = 'modal'; m.id = 'mdup'; document.body.appendChild(m); feedback('ask');
+    m.innerHTML = '<div><h2 style="margin-top:0">👕 Este modelo ya tiene muestra</h2><div style="font-size:17px;font-weight:800">' + esc(r[3]) + ' <span style="color:#4fc3ff">' + esc(r[4]) + '</span> · T' + esc(r[6]) + '</div><div class="mut" style="margin:6px 0 12px">' + esc(r[7]) + '</div>' +
+      '<div style="margin-bottom:12px">En exhibición va <b>1 prenda por modelo</b>. Si la cámara lo leyó dos veces, toca <b>No sumar</b>.</div>' +
+      '<button class="big g" id="mdno">✋ No sumar (ya estaba)</button><button class="big o" style="margin-top:8px" id="mdsi">➕ Sí, hay otra muestra</button></div>';
+    var cierra = function () { m.remove(); LAST.t = Date.now(); };
+    $('mdno').onclick = function () { cierra(); mostrar('warn', '<h2>✋ No se sumó</h2><div class="mut">' + esc(r[3] + '-' + r[4] + ' · T' + r[6]) + ' ya tenía muestra</div>'); };
+    $('mdsi').onclick = function () { cierra(); agregar(i, n, modo, leido, true); };
   }
   /* 👟 v83: si un modelo-talla con muestra exhibida pasa el stock del sistema (suma de todos los teléfonos), Artemis avisa y se pregunta si alguna caja era solo el pie derecho. */
   var EXA = {}, EXQ = [];
@@ -341,13 +384,10 @@
     };
     pide();
   }
+  /* v91: un código que no está en la data NO se registra (alargaba la lista y confundía): se pide digitar el producto */
   function desconocido(t) {
-    encolar({ l: t, c: '', n: 1, m: 'X' });
-    CNT.tot += 1; CNT.ub[UB] = (CNT.ub[UB] || 0) + 1;
-    HIST.push({ q: SEQ, t: Date.now(), c: '', l: t, u: UB, m: 'X', n: 1, d: 'Código ' + t });
-    guardar(); pintaCnt(); pintaHist();
-    mostrar('bad', '<h2>❓ Código no encontrado</h2><div style="font-size:18px;font-weight:800">' + esc(t) + '</div><div class="mut">Quedó registrado para revisión. Si es un error, toca ↩ Deshacer. Revisa la etiqueta o usa ⌨ Digitar.</div>', NOFOTO);
-    feedback('bad'); syncPronto();
+    mostrar('bad', '<h2>❓ Código no encontrado · no se contó</h2><div style="font-size:18px;font-weight:800">' + esc(t) + '</div><div class="mut">Este código no está en la data de Artemis. Busca el producto por su modelo y digítalo.</div><button class="big o" style="margin-top:8px;padding:10px;font-size:15px" id="dgx">⌨ Digitar el producto</button>', NOFOTO);
+    feedback('bad'); $('dgx').onclick = function () { manual(); };
   }
   function fijarUb(u) {
     if (UB === u) { mostrar('warn', '<h2>📍 Ya estás en ' + esc(u) + '</h2>'); return; }
@@ -434,6 +474,7 @@
       ESTADO = r.estado || ESTADO; ERRSRV = '';
       if (r.ack >= 0) { Q = Q.filter(function (x) { return x.q > r.ack; }); guardar(); }
       if (r.ms) { MS = {}; r.ms.forEach(function (c) { MS[c] = 1; }); LS(K('ms'), JSON.stringify(MS)); }
+      if (r.mt) Object.keys(r.mt).forEach(function (k) { MT[k] = r.mt[k]; });
       if (r.ex && r.ex.length) revisaExceso(r.ex);
     }).catch(function (e) { ERRSRV = e.message; if (/cerrado/i.test(e.message)) ESTADO = 'CERRADO'; if (/anulado/i.test(e.message)) ESTADO = 'ANULADO'; })
       .then(function () { syncing = false; estadoPill(); if (Q.length && ESTADO === 'EN CURSO' && !ERRSRV) setTimeout(sync, 400); });
@@ -456,22 +497,37 @@
   window.addEventListener('beforeunload', function (e) { if (Q.length) { e.preventDefault(); e.returnValue = ''; } });
 
   /* ---------- cámara ---------- */
-  function camara(cb) {
+  /* v91: productos y anaqueles solo con código de barras (el QR solo para entrar al inventario); zoom, linterna y más resolución */
+  function camara(cb, qr) {
     if (typeof Html5Qrcode === 'undefined') { alert('No cargó el lector. Revisa internet y vuelve a abrir.'); return; }
     var F = Html5QrcodeSupportedFormats;
-    scanner = scanner || new Html5Qrcode('reader', { formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.CODE_93, F.ITF, F.QR_CODE], experimentalFeatures: { useBarCodeDetectorIfSupported: true }, verbose: false });
-    scanner.start({ facingMode: 'environment' }, { fps: 12, qrbox: function (w, h) { return { width: Math.floor(w * .88), height: Math.floor(Math.min(h * .5, 180)) }; }, aspectRatio: 1.6 },
+    if (scanner && scanner._qr !== !!qr) { try { scanner.clear(); } catch (e) {} scanner = null; }
+    scanner = scanner || new Html5Qrcode('reader', { formatsToSupport: qr ? [F.QR_CODE] : [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39], experimentalFeatures: { useBarCodeDetectorIfSupported: true }, verbose: false });
+    scanner._qr = !!qr;
+    scanner.start({ facingMode: 'environment' }, { fps: 15, qrbox: function (w, h) { return qr ? { width: Math.floor(Math.min(w, h) * .75), height: Math.floor(Math.min(w, h) * .75) } : { width: Math.floor(w * .92), height: Math.floor(Math.min(h * .55, 220)) }; }, aspectRatio: 1.6,
+      videoConstraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } },
       function (t) { cb(t); }, function () {})
-      .then(function () { scanner._on = true; })
+      .then(function () { scanner._on = true; if (!qr) zoomBar(); })
       .catch(function (e) { alert('No se pudo abrir la cámara: ' + e); var b = $('cam'); if (b) { b.textContent = '▶ Empezar a escanear'; b.className = 'big g'; } });
   }
-  function pararCam() { if (scanner && scanner._on) { scanner._on = false; scanner.stop().catch(function () {}); } }
+  function pararCam() { var z = $('zbar'); if (z) z.remove(); if (scanner && scanner._on) { scanner._on = false; scanner.stop().catch(function () {}); } }
+  function zoomBar() {
+    var cap = {}; try { cap = scanner.getRunningTrackCapabilities() || {}; } catch (e) {}
+    try { scanner.applyVideoConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(function () {}); } catch (e) {}
+    var rd = $('reader'); if (!rd || $('zbar')) return;
+    var b = document.createElement('div'); b.className = 'zbar'; b.id = 'zbar'; rd.parentNode.insertBefore(b, rd.nextSibling);
+    var z = cap.zoom, zv = Number(LS('aud_zoom')) || (z ? Math.max(z.min || 1, 1) : 1), tor = false;
+    var pon = function (v) { if (!z) return; zv = Math.min(z.max, Math.max(z.min, Math.round(v * 10) / 10)); LS('aud_zoom', String(zv)); var s = $('zval'); if (s) s.textContent = zv.toFixed(1) + '×'; try { scanner.applyVideoConstraints({ advanced: [{ zoom: zv }] }).catch(function () {}); } catch (e) {} };
+    b.innerHTML = (z ? '<button id="zmen">🔍 −</button><span id="zval"></span><button id="zmas">🔍 +</button>' : '<span style="flex:1;text-align:left">Zoom no disponible en este celular: acerca o aleja el celular</span>') + (cap.torch ? '<button id="ztor">🔦</button>' : '');
+    if (z) { var st = Math.max(.2, ((z.max || 4) - (z.min || 1)) / 10); $('zmen').onclick = function () { pon(zv - st); }; $('zmas').onclick = function () { pon(zv + st); }; pon(zv); }
+    if (cap.torch) $('ztor').onclick = function () { tor = !tor; this.className = tor ? 'on' : ''; try { scanner.applyVideoConstraints({ advanced: [{ torch: tor }] }).catch(function () {}); } catch (e) {} };
+  }
 
   /* ---------- modo demo (para practicar sin tocar Artemis) ---------- */
   function demoApi(a, x) {
     return new Promise(function (ok) { setTimeout(function () {
       if (a === 'join') return ok({ ok: true, inv: { id: 'DEMO', lugar: 'DEMO', nlugar: 'Tienda de práctica', estado: 'EN CURSO', tipo: 'TOTAL', equipo: ['Vendedor 1', 'Vendedor 2'] } });
-      if (a === 'cat') return ok({ ok: true, cat: JSON.stringify({ v: 1, f: 2, ubics: ['F1-01', 'F2-01', 'J2-02'], rows: [
+      if (a === 'cat') return ok({ ok: true, cat: JSON.stringify({ v: 1, f: 2, ubics: ['F1-01', 'F2-01', 'J2-02'], mx: { 'F35543-0': 1 }, rows: [
         ['259171', '2591711', '4057286697253', 'AQ1703', '0', '0', '7', 'ADILETTE SHOWER', 'ADIDAS', 'Sandalias', 'F1-01', 1],
         ['327807', '3278079', '4060509397328', 'F35539', '0', '0', '7', 'ADILETTE AQUA', 'ADIDAS', 'Sandalias', 'F2-01', 1],
         ['327806', '3278062', '4060509396727', 'F35543', '0', '0', '7', 'ADILETTE AQUA', 'ADIDAS', 'Sandalias', 'F2-01', 1],
@@ -485,6 +541,7 @@
     }, 300); });
   }
 
+  if (DEMO) window._oc = onCode; /* solo modo práctica: para pruebas */
   inicio();
 })();
 </script>

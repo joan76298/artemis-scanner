@@ -63,7 +63,7 @@
   if (P.get('s')) LS('aud_s', P.get('s'));
   var DEV = LS('aud_dev'); if (!DEV) { DEV = 'D' + Math.random().toString(36).slice(2, 10); LS('aud_dev', DEV); }
   var SEQ = Number(LS('aud_seq') || 0);
-  var INV = null, USER = '', CAT = [], IDX = {}, MC = {}, UBICS = [], UB = '', Q = [], HIST = [], CNT = { tot: 0, ub: {} }, LAST = { c: '', t: 0 }, FOT = {}, FASE = '', CATF2 = false, UASK = {}, MS = {}, PASK = {}, RC = null, RCI = null, IDX2 = {}, MX = {}, MT = {}, LACC = 0, ZONAS = ['VITRINA', 'PARED', 'MESA', 'ISLA', 'MOSTRADOR', 'ESCAPARATE'], scanner = null, actx = null, syncing = false, ESTADO = '', ERRSRV = '';
+  var INV = null, USER = '', CAT = [], IDX = {}, MC = {}, UBICS = [], UB = '', Q = [], HIST = [], CNT = { tot: 0, ub: {} }, LAST = { c: '', t: 0 }, FOT = {}, FASE = '', CATF2 = false, UASK = {}, MS = {}, PASK = {}, RC = null, RCI = null, IDX2 = {}, MX = {}, MT = {}, LACC = 0, ZONAS = ['VITRINA', 'PARED', 'MESA', 'ISLA', 'MOSTRADOR', 'EXHIBIDOR'], scanner = null, actx = null, syncing = false, ESTADO = '', ERRSRV = '';
   var $ = function (id) { return document.getElementById(id); };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var sin0 = function (c) { return String(c == null ? '' : c).trim().replace(/^0+(?=.)/, ''); };
@@ -104,7 +104,7 @@
   }
 
   /* ---------- pantallas ---------- */
-  function pantalla(h) { $('app').innerHTML = (DEMO ? '<div class="demo">MODO DEMO · nada se envía a Artemis</div>' : '') + (INV && INV.tipo === 'PRUEBA' ? '<div class="demo" style="background:#7a4b00">🧪 MODO PRUEBA · se muestran cantidades · no cuenta para ninguna tienda</div>' : '') + h; }
+  function pantalla(h) { $('app').innerHTML = (DEMO ? '<div class="demo">MODO DEMO · nada se envía a Artemis</div>' : '') + (INV && INV.tipo === 'PRUEBA' ? '<div class="demo" style="background:#7a4b00">🧪 MODO PRUEBA · se muestran cantidades · no cuenta para ninguna tienda</div>' : '') + (INV && INV.tipo === 'LIBRE' ? '<div class="demo" style="background:#1f4f8a">📋 ESCANEO LIBRE · fichero · no cuenta para ninguna tienda</div>' : '') + h; }
   function inicio() {
     recuperar();
     if (!TOKEN) return sinCodigo();
@@ -135,7 +135,7 @@
       (INV.equipo || []).map(function (n, i) { return '<button data-n="' + i + '">👤 ' + esc(n) + '</button>'; }).join('') +
       '</div><input class="in" id="otro" placeholder="Otro nombre…"><br><br><button class="big" id="okn">Continuar</button></div></div>');
     document.querySelectorAll('[data-n]').forEach(function (b) { b.onclick = function () { fijarNombre(INV.equipo[Number(b.dataset.n)]); }; });
-    $('okn').onclick = function () { var n = $('otro').value.trim(); if (n.length < 2) { alert('Escribe tu nombre'); return; } fijarNombre(n); };
+    $('okn').onclick = function () { var n = $('otro').value.trim(); if (n.length < 2) { avisar('Escribe tu nombre'); return; } fijarNombre(n); };
   }
   function fijarNombre(n) { USER = n; LS(K('u'), n); cargarCatalogo(); }
   function cargarCatalogo() {
@@ -150,7 +150,7 @@
     });
   }
   function usarCat(c) {
-    CATF2 = c.f === 2; if (!FASE && (ALMACEN() || INV.tipo === 'SORPRESA')) FASE = 'A';
+    CATF2 = c.f === 2; if (!FASE && (ALMACEN() || INV.tipo === 'SORPRESA' || INV.tipo === 'LIBRE')) FASE = 'A'; if (INV.tipo === 'LIBRE' && !UB) UB = 'GENERAL';
     CAT = c.rows; UBICS = c.ubics || []; IDX = {}; IDX2 = {}; MC = {}; MX = c.mx || {};
     CAT.forEach(function (r, i) {
       [r[0], r[1], r[2]].forEach(function (k) { if (!k) return; var a = nk(k); if (IDX[k] == null) IDX[k] = i; if (a && IDX[a] == null) IDX[a] = i; if (/^\d{7,14}$/.test(a) && IDX2[a.slice(0, -1)] == null) IDX2[a.slice(0, -1)] = i; });
@@ -183,23 +183,25 @@
     $('cfase').onclick = function (e) { e.preventDefault(); elegirFase(); }; if ($('bsala')) $('bsala').onclick = finSala;
     $('kbok').onclick = function () { var v = $('kb').value.trim(); $('kb').value = ''; if (v) { LAST.c = ''; onCode(v); } };
     $('kb').onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); $('kbok').onclick(); } };
-    $('salir').onclick = function (e) { e.preventDefault(); if (confirm('¿Cambiar de persona en este teléfono?')) { LS(K('u'), null); USER = ''; pararCam(); elegirNombre(); } };
+    $('salir').onclick = function (e) { e.preventDefault(); conf('¿Cambiar de persona en este teléfono?', function () { LS(K('u'), null); USER = ''; pararCam(); elegirNombre(); }); };
     pintaUb(); pintaCnt(); pintaHist(); estadoPill(); if (RCI) pintaRc(); else pollRc();
   }
   function pintaUb() {
     if (FASE === 'S' && !UB) {
       $('ubx').innerHTML = '<div class="ub no">📍 Elige la zona de la sala (o escanea su etiqueta)</div><div class="acts" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:10px">' +
-        ZONAS.map(function (z) { return '<button data-z="' + z + '">' + z + '</button>'; }).join('') + '</div>';
-      document.querySelectorAll('[data-z]').forEach(function (b) { b.onclick = function () { fijarUb('SALA-' + b.dataset.z); }; }); return;
+        ZONAS.map(function (z) { return '<button data-z="' + z + '">' + z + '</button>'; }).join('') + '<button id="zotra" style="grid-column:1/-1;border-style:dashed">✏ Otra zona: escribir nombre</button></div>';
+      document.querySelectorAll('[data-z]').forEach(function (b) { b.onclick = function () { fijarUb('SALA-' + b.dataset.z); }; }); $('zotra').onclick = elegirUb; return;
     }
     $('ubx').innerHTML = UB ? '<div class="ub"><span>📍</span><div>' + esc(UB) + '<small>Ubicación actual · escanea otra etiqueta para cambiar</small></div></div>'
-      : '<div class="ub no">📍 Escanea la etiqueta del anaquel para empezar</div>';
+      : '<div class="ub no">📍 Escanea la etiqueta del anaquel para empezar</div><button class="big o" id="ubw" style="margin:-2px 0 10px;padding:10px;font-size:15px">⌨ El anaquel no tiene etiqueta: escribir su nombre</button>';
+    if ($('ubw')) $('ubw').onclick = elegirUb;
   }
   function pintaCnt() { $('cub').textContent = UB ? (CNT.ub[UB] || 0) : 0; $('ctot').textContent = FASE === 'S' ? (CNT.s || 0) : CNT.tot; }
   function pintaHist() {
-    $('hist').innerHTML = HIST.slice(-8).reverse().map(function (h) {
-      return '<div class="' + (h.x ? 'x' : '') + '"><span>' + (h.m === 'X' ? '❓ ' : h.m === 'M' ? '⌨ ' : h.m === 'S' ? '🏪 ' : '') + esc(h.d) + '</span><span class="mut">' + esc(h.u) + ' · ' + new Date(h.t).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) + '</span></div>';
+    $('hist').innerHTML = HIST.slice(-12).reverse().map(function (h) {
+      return '<div data-hq="' + h.q + '" class="' + (h.x ? 'x' : '') + '"><span>' + (h.m === 'X' ? '❓ ' : h.m === 'M' ? '⌨ ' : h.m === 'S' ? '🏪 ' : '') + esc(h.d) + '</span><span class="mut">' + esc(h.u) + ' · ' + new Date(h.t).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) + '</span></div>';
     }).join('') || '<div class="mut">Aún nada</div>';
+    $('hist').querySelectorAll('[data-hq]').forEach(function (d) { d.onclick = function () { var q = Number(d.dataset.hq), h = HIST.filter(function (z) { return z.q === q; })[0]; if (!h || h.x || h.n <= 0) return; conf('¿Quitar este escaneo? ' + h.d + ' (' + h.u + ')', function () { quitarH(h); }, '↩ Sí, quitar', 'No'); }; });
   }
   /* v83: sonidos bien distintos. ok = bip agudo · warn = tin-tin · ask = tin-tin-tin subiendo · bad = zumbido grave que baja */
   function feedback(tipo) {
@@ -254,7 +256,7 @@
     guardar(); pintaCnt(); pintaHist();
     var veces = 0; HIST.forEach(function (h) { if (h.c === r[0] && h.u === UB && !h.x) veces += h.n; });
     var lleno = n > 0 && MX[mc] > 0 && antes >= MX[mc];
-    var noF = CATF2 && r[11] !== 1, us = String(r[10] || ''), fue = !noF && FASE === 'A' && CATF2 && us && UBICS.indexOf(UB) >= 0 && us.split('|').indexOf(UB) < 0 && !UASK[r[0] + '|' + UB];
+    var noF = CATF2 && r[11] !== 1 && INV.tipo !== 'LIBRE', us = String(r[10] || ''), fue = !noF && FASE === 'A' && CATF2 && us && UBICS.indexOf(UB) >= 0 && us.split('|').indexOf(UB) < 0 && !UASK[r[0] + '|' + UB];
     mostrar(noF || fue || lleno ? 'warn' : 'ok', '<div class="okh">✅ ' + (modo === 'S' ? 'Muestra agregada' : 'Código agregado') + (veces > 1 ? ' · ×' + veces + ' aquí' : '') + '</div><h2>' + esc(r[3]) + ' <span style="color:#4fc3ff">' + esc(r[4]) + '</span></h2><div>' + esc(r[7]) + '</div><div class="mut">' + esc(r[5]) + ' · ' + esc(r[8]) + '</div><span class="t">T ' + esc(r[6]) + '</span>' + (dig ? ' <span class="pill p-wait">digitado</span>' : '') +
       (INV && INV.tipo === 'PRUEBA' ? '<div style="margin-top:6px;font-size:13px;font-weight:800;color:#ffd36b">🧪 Sistema: ' + (Number(r[12]) || 0) + ' und esta talla · ' + (MX[mc] || 0) + ' und el modelo · contado ' + (antes + n) + '</div>' : '') +
       (lleno ? '<div style="margin-top:8px;font-weight:800;color:#ffd36b">⚠ Este modelo ya está completo según el sistema. Revisa las cajas: ¿es otra caja distinta?</div><div style="display:flex;gap:6px;margin-top:6px"><button class="big o" style="padding:8px;font-size:14px" id="llok">✔ Sí, es otra caja</button><button class="big o" style="padding:8px;font-size:14px;border-color:#ff7d8c" id="llno">↩ No, era repetida</button></div>' : '') +
@@ -276,6 +278,20 @@
     Q.forEach(function (x) { if (ci[x.c] === true && 'EMSD'.indexOf(x.m) >= 0) t += Number(x.n) || 0; });
     HIST.forEach(function (h) { if (ci[h.c] === false && !h.x && 'EMS'.indexOf(h.m) >= 0) t += h.n; });
     return t;
+  }
+  /* v92: cuántas veces se contó este código en la ubicación actual, y quitar el último (para corregir antes de terminar el anaquel) */
+  function cuentaAqui(ci) { var n = 0; HIST.forEach(function (h) { if (h.c === ci && h.u === UB && !h.x && 'EMS'.indexOf(h.m) >= 0) n += h.n; }); return n; }
+  function quitarUltimo(ci) { for (var i = HIST.length - 1; i >= 0; i--) { var h = HIST[i]; if (h.c === ci && h.u === UB && !h.x && h.n > 0 && 'EMS'.indexOf(h.m) >= 0) { quitarH(h); return; } } }
+  /* v92: ventanas propias de Artemis (en vez de las del navegador que decían "joan76298.github.io dice") */
+  function conf(msg, si, txtSi, txtNo) {
+    var m = document.createElement('div'); m.className = 'modal'; document.body.appendChild(m);
+    m.innerHTML = '<div><div style="font-weight:900;color:#4fc3ff;letter-spacing:.5px;margin-bottom:6px">ARTEMIS</div><div style="font-size:18px;font-weight:800;margin-bottom:14px">' + esc(msg) + '</div><button class="big g" id="cfsi">' + esc(txtSi || 'Sí') + '</button><button class="big o" style="margin-top:8px" id="cfno">' + esc(txtNo || 'Cancelar') + '</button></div>';
+    m.querySelector('#cfsi').onclick = function () { m.remove(); si(); }; m.querySelector('#cfno').onclick = function () { m.remove(); };
+  }
+  function avisar(msg) {
+    var m = document.createElement('div'); m.className = 'modal'; document.body.appendChild(m);
+    m.innerHTML = '<div><div style="font-weight:900;color:#4fc3ff;letter-spacing:.5px;margin-bottom:6px">ARTEMIS</div><div style="font-size:18px;font-weight:800;margin-bottom:14px">' + esc(msg) + '</div><button class="big g" id="avok">Entendido</button></div>';
+    m.querySelector('#avok').onclick = function () { m.remove(); };
   }
   function quitarH(h) {
     if (h.x) return; var g = UB; UB = h.u;
@@ -331,7 +347,7 @@
     }).catch(function () {});
   }
   function listaRc() {
-    if (!RC || !RC.it.length) { alert('No hay nada para recontar'); return; }
+    if (!RC || !RC.it.length) { avisar('No hay nada para recontar'); return; }
     var m = document.createElement('div'); m.className = 'modal'; document.body.appendChild(m);
     m.innerHTML = '<div><h2 style="margin-top:0">🔁 Recontar</h2><div class="mut">Busca cada producto en todas sus ubicaciones y escanea cada unidad que encuentres. No importa lo que contaron antes.</div><div class="list" style="margin:10px 0">' +
       RC.it.map(function (ci) { var i = buscar(ci), r = i >= 0 ? CAT[i] : null; return '<div><span>' + (r ? '<b>' + esc(r[3] + '-' + r[4]) + '</b> T' + esc(r[6]) + ' · ' + esc(r[7]) + (r[10] ? ' <span class="mut">📍 ' + esc(String(r[10]).split('|').join(', ')) + '</span>' : '') : esc(ci)) + '</span><button class="big g" style="width:auto;padding:6px 12px;font-size:14px" data-rci="' + esc(ci) + '">Recontar</button></div>'; }).join('') +
@@ -348,7 +364,8 @@
     $('rcb').innerHTML = RCI ? '<div class="banner" style="background:#5a4206"><div>🔁 Recontando <b>' + esc(r ? r[3] + '-' + r[4] + ' T' + r[6] : RCI.ci) + '</b> · encontradas: <b style="font-size:22px">' + RCI.n + '</b></div><div style="display:flex;gap:6px;margin-top:8px"><button class="big o" style="padding:8px" id="rcm">−1</button><button class="big o" style="padding:8px" id="rcp">+1</button><button class="big g" style="padding:8px" id="rcf">✔ Terminé</button></div></div>' : '';
     if (!RCI) return;
     $('rcp').onclick = function () { recSuma(1); }; $('rcm').onclick = function () { if (RCI.n > 0) recSuma(-1); };
-    $('rcf').onclick = function () { if (!confirm('¿Terminaste? Encontraste ' + RCI.n + ' unidad(es) de este producto.')) return;
+    $('rcf').onclick = function () { conf('¿Terminaste? Encontraste ' + RCI.n + ' unidad(es) de este producto.', rcFin, '✔ Sí, terminé'); };
+    var rcFin = function () {
       encolar({ l: 'R' + RC.r, c: RCI.ci, n: RCI.n, m: 'Z' }); guardar(); syncPronto();
       RC.it = RC.it.filter(function (c) { return c !== RCI.ci; }); RCI = null; pintaRc(); mostrar('ok', '<h2>✔ Reconteo enviado</h2>'); feedback('ok'); setTimeout(pollRc, 4000); };
   }
@@ -359,15 +376,17 @@
   }
   /* ❌ etiqueta equivocada: resta el escaneo, lo marca y abre Digitar para elegir el correcto. */
   function noEs(h) {
-    if (h.x) return; if (!confirm('¿La etiqueta no corresponde al producto? Se resta este escaneo y queda marcado para revisión. Luego digita el producto correcto.')) return;
+    if (h.x) return; conf('¿La etiqueta no corresponde al producto? Se resta este escaneo y queda marcado para revisión. Luego digita el producto correcto.', function () { noEs2(h); }, '❌ Sí, no es este');
+  }
+  function noEs2(h) {
     var g = UB; UB = h.u;
     encolar({ l: h.l || h.c, c: h.c, n: -1, m: h.m === 'S' ? 'S' : 'D' }); encolar({ l: h.l || h.c, c: h.c, n: 0, m: 'N' });
     UB = g; h.x = true; if (h.m === 'S') CNT.s = (CNT.s || 1) - 1; else CNT.tot -= 1; CNT.ub[h.u] = (CNT.ub[h.u] || 1) - 1;
     guardar(); pintaCnt(); pintaHist(); syncPronto(); manual();
   }
   /* 🏁 fin de la sala: aviso obligatorio de modelos con stock que nadie escaneó como muestra. */
-  function finSala() {
-    if (!confirm('¿Terminaste toda la sala de ventas?')) return;
+  function finSala() { conf('¿Terminaste toda la sala de ventas?', finSala2, '🏁 Sí, terminé la sala'); }
+  function finSala2() {
     pararCam();
     var m = document.createElement('div'); m.className = 'modal'; document.body.appendChild(m);
     m.innerHTML = '<div><h2 style="margin-top:0">⏳ Revisando lo exhibido…</h2><div class="mut" id="sxm">Enviando tus escaneos.</div></div>';
@@ -397,34 +416,41 @@
     feedback(conocido ? 'ok' : 'warn');
   }
   function finUb() {
-    if (!UB) { alert('Primero escanea un anaquel'); return; }
-    if (!confirm('¿Terminaste el anaquel ' + UB + ' (' + (CNT.ub[UB] || 0) + ' unidades)?')) return;
+    if (!UB) { avisar('Primero escanea un anaquel'); return; }
+    conf('¿Terminaste el anaquel ' + UB + ' (' + (CNT.ub[UB] || 0) + ' unidades)?', function () {
     encolar({ l: '', c: '', n: 0, m: 'F' }); var u = UB; UB = ''; guardar(); pintaUb(); pintaCnt();
-    mostrar('ok', '<h2>✅ ' + esc(u) + ' terminado</h2><div class="mut">Escanea la etiqueta del siguiente anaquel.</div>'); feedback('ok'); syncPronto();
+    mostrar('ok', '<h2>✅ ' + esc(u) + ' terminado</h2><div class="mut">Escanea la etiqueta del siguiente anaquel.</div>'); feedback('ok'); syncPronto(); }, '✅ Sí, terminé');
   }
   function deshacer() {
     for (var i = HIST.length - 1; i >= 0; i--) {
       var h = HIST[i]; if (h.x || h.n <= 0) continue;
-      if (!confirm('¿Deshacer: ' + h.d + ' (' + h.u + ')?')) return;
+      conf('¿Deshacer: ' + h.d + ' (' + h.u + ')?', function () { deshacer2(h); }, '↩ Sí, deshacer'); return;
+    }
+    avisar('No hay nada para deshacer');
+  }
+  function deshacer2(h) {
+    {
       var guardaUb = UB; UB = h.u;
       encolar({ l: h.l || h.c, c: h.c, n: -1, m: h.m === 'X' ? 'X' : h.m === 'S' ? 'S' : 'D' });
       UB = guardaUb; h.x = true; if (h.m === 'S') CNT.s = (CNT.s || 1) - 1; else CNT.tot -= 1; CNT.ub[h.u] = (CNT.ub[h.u] || 1) - 1;
       guardar(); pintaCnt(); pintaHist(); mostrar('warn', '<h2>↩ Deshecho</h2><div>' + esc(h.d) + '</div>'); syncPronto(); return;
     }
-    alert('No hay nada para deshacer');
+    avisar('No hay nada para deshacer');
   }
   function elegirUb() {
     var m = document.createElement('div'); m.className = 'modal';
-    m.innerHTML = '<div><h2 style="margin-top:0">📍 Ubicación</h2><div class="mut">Lo normal es escanear la etiqueta del anaquel. Si no tiene etiqueta, escríbela o elígela:</div><br><input class="in" id="ubq" placeholder="Ej.: F1-01" style="text-transform:uppercase"><div id="ubl" style="margin-top:8px;max-height:45vh;overflow:auto"></div><br><button class="big o" id="ubc">Cancelar</button></div>';
+    var S = FASE === 'S';
+    m.innerHTML = '<div><h2 style="margin-top:0">📍 ' + (S ? 'Zona de la sala' : 'Ubicación') + '</h2><div class="mut">' + (S ? 'Escribe el nombre de la zona (ej.: EXHIBIDOR NIKE, PARED FONDO) y tócalo:' : 'Lo normal es escanear la etiqueta del anaquel. Si no tiene etiqueta, escríbela o elígela:') + '</div><br><input class="in" id="ubq" placeholder="Ej.: F1-01" style="text-transform:uppercase"><div id="ubl" style="margin-top:8px;max-height:45vh;overflow:auto"></div><br><button class="big o" id="ubc">Cancelar</button></div>';
     document.body.appendChild(m);
-    var pinta = function () { var q = $('ubq').value.trim().toUpperCase(); var L = UBICS.filter(function (u) { return !q || u.indexOf(q) >= 0; }).slice(0, 40);
+    if (S) $('ubq').placeholder = 'Ej.: EXHIBIDOR NIKE'; $('ubq').focus();
+    var pinta = function () { var q = $('ubq').value.trim().toUpperCase().replace(/\s+/g, ' ').slice(0, 30); var L = S ? (q ? [q] : ZONAS.slice()) : UBICS.filter(function (u) { return !q || u.indexOf(q) >= 0; }).slice(0, 40);
       if (q && L.indexOf(q) < 0) L.unshift(q);
       $('ubl').innerHTML = L.map(function (u) { return '<button class="big o" style="margin:4px 0;text-align:left" data-u="' + esc(u) + '">📍 ' + esc(u) + '</button>'; }).join('');
-      m.querySelectorAll('[data-u]').forEach(function (b) { b.onclick = function () { m.remove(); fijarUb(b.dataset.u); }; }); };
+      m.querySelectorAll('[data-u]').forEach(function (b) { b.onclick = function () { m.remove(); fijarUb((S ? 'SALA-' : '') + b.dataset.u); }; }); };
     $('ubq').oninput = pinta; pinta(); $('ubc').onclick = function () { m.remove(); };
   }
   function manual() {
-    if (!UB) { alert('Primero escanea o elige la ubicación'); return; }
+    if (!UB) { avisar('Primero escanea o elige la ubicación'); return; }
     var m = document.createElement('div'); m.className = 'modal';
     m.innerHTML = '<div><h2 style="margin-top:0">⌨ Digitar</h2><div class="mut">Escribe el modelo y el color (ej.: 309668-31 o 309668 31) o el código de barras.</div><br><input class="in" id="mq" autocomplete="off" style="text-transform:uppercase"><div id="ml"></div><br><button class="big o" id="mc">Cerrar</button></div>';
     document.body.appendChild(m); $('mq').focus();
@@ -437,9 +463,10 @@
         var rs = MC[k].map(function (i) { return CAT[i]; }), r0 = rs[0];
         rs = MC[k].slice().sort(function (a, b) { var ta = CAT[a][6], tb = CAT[b][6], na = parseFloat(ta), nb = parseFloat(tb); return (isNaN(na) || isNaN(nb)) ? (ta < tb ? -1 : 1) : na - nb; });
         return '<div class="grp"><img data-f="' + esc(k) + '" src="' + (FOT[k] || NOFOTO) + '"><div style="flex:1"><b>' + esc(k) + '</b><div class="mut">' + esc(r0[7]) + ' · ' + esc(r0[5]) + '</div><div class="tallas">' +
-          rs.map(function (i) { return '<button data-i="' + i + '">' + esc(CAT[i][6]) + '</button>'; }).join('') + '</div></div></div>';
+          rs.map(function (i) { var c = cuentaAqui(CAT[i][0]); return '<span style="display:inline-flex;margin:3px"><button data-i="' + i + '" style="margin:0' + (c ? ';background:#16864a' : '') + '">' + esc(CAT[i][6]) + (c ? ' ×' + c : '') + '</button>' + (c ? '<button data-r="' + i + '" style="margin:0 0 0 2px;background:#7a1f2b;min-width:38px">−</button>' : '') + '</span>'; }).join('') + '</div></div></div>';
       }).join('') || '<div class="mut" style="margin-top:10px">Sin resultados</div>';
-      m.querySelectorAll('[data-i]').forEach(function (b) { b.onclick = function () { agregar(Number(b.dataset.i), 1, 'M'); b.style.background = '#16864a'; var n = Number(b.dataset.c || 0) + 1; b.dataset.c = n; b.textContent = CAT[Number(b.dataset.i)][6] + ' ✔' + (n > 1 ? n : ''); }; });
+      m.querySelectorAll('[data-i]').forEach(function (b) { b.onclick = function () { agregar(Number(b.dataset.i), 1, 'M'); setTimeout(pinta, 50); }; });
+      m.querySelectorAll('[data-r]').forEach(function (b) { b.onclick = function () { quitarUltimo(CAT[Number(b.dataset.r)][0]); setTimeout(pinta, 50); }; });
       keys.forEach(function (k) { foto(k); });
     };
     $('mq').oninput = pinta; $('mc').onclick = function () { m.remove(); };
@@ -499,7 +526,7 @@
   /* ---------- cámara ---------- */
   /* v91: productos y anaqueles solo con código de barras (el QR solo para entrar al inventario); zoom, linterna y más resolución */
   function camara(cb, qr) {
-    if (typeof Html5Qrcode === 'undefined') { alert('No cargó el lector. Revisa internet y vuelve a abrir.'); return; }
+    if (typeof Html5Qrcode === 'undefined') { avisar('No cargó el lector. Revisa internet y vuelve a abrir.'); return; }
     var F = Html5QrcodeSupportedFormats;
     if (scanner && scanner._qr !== !!qr) { try { scanner.clear(); } catch (e) {} scanner = null; }
     scanner = scanner || new Html5Qrcode('reader', { formatsToSupport: qr ? [F.QR_CODE] : [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39], experimentalFeatures: { useBarCodeDetectorIfSupported: true }, verbose: false });
@@ -508,7 +535,7 @@
       videoConstraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } },
       function (t) { cb(t); }, function () {})
       .then(function () { scanner._on = true; if (!qr) zoomBar(); })
-      .catch(function (e) { alert('No se pudo abrir la cámara: ' + e); var b = $('cam'); if (b) { b.textContent = '▶ Empezar a escanear'; b.className = 'big g'; } });
+      .catch(function (e) { avisar('No se pudo abrir la cámara: ' + e); var b = $('cam'); if (b) { b.textContent = '▶ Empezar a escanear'; b.className = 'big g'; } });
   }
   function pararCam() { var z = $('zbar'); if (z) z.remove(); if (scanner && scanner._on) { scanner._on = false; scanner.stop().catch(function () {}); } }
   function zoomBar() {

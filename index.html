@@ -369,8 +369,11 @@
     if (!INV || DEMO || !USER || ESTADO !== 'EN CURSO' || !navigator.onLine) return;
     api('rc', { user: USER }).then(function (r) {
       MS = {}; (r.ms || []).forEach(function (c) { MS[c] = 1; }); LS(K('ms'), JSON.stringify(MS));
-      RC = r.rc; var hay = RC && RC.it.length; if ($('rcb')) $('rcb').innerHTML = hay ? '<div class="banner" style="background:#5a4206;display:flex;justify-content:space-between;align-items:center;gap:8px"><span>🔁 Tienes ' + RC.it.length + ' producto' + (RC.it.length === 1 ? '' : 's') + ' para recontar</span><button class="big o" style="width:auto;padding:6px 12px;font-size:14px" id="rcab">Abrir</button></div>' : '';
+      var antes = RC ? RC.r + '|' + RC.it.length : ''; RC = r.rc; var hay = RC && RC.it.length; if ($('rcb')) $('rcb').innerHTML = hay ? '<div class="banner" style="background:#5a4206;display:flex;justify-content:space-between;align-items:center;gap:8px"><span>🔁 Tienes ' + RC.it.length + ' producto' + (RC.it.length === 1 ? '' : 's') + ' para recontar</span><button class="big o" style="width:auto;padding:6px 12px;font-size:14px" id="rcab">Abrir</button></div>' : '';
       if (hay) $('rcab').onclick = listaRc;
+      /* v94: aviso grande con sonido cuando Logística manda productos a recontar */
+      var ahora = hay ? RC.r + '|' + RC.it.length : ''; if (hay && ahora !== antes && ahora !== LS(K('rcv')) && !RCI && !document.querySelector('.modal')) {
+        LS(K('rcv'), ahora); feedback('ask'); conf('🔁 Logística te pide recontar ' + RC.it.length + ' producto' + (RC.it.length === 1 ? '' : 's') + '. Búscalos y escanéalos de nuevo.', listaRc, '🔁 Ver qué recontar', 'Luego'); }
     }).catch(function () {});
   }
   function listaRc() {
@@ -546,7 +549,7 @@
   }
   setInterval(function () { if (ESTADO === 'PAUSADO' && INV) api('join').then(function (r) { ESTADO = r.inv.estado; estadoPill(); if (ESTADO === 'EN CURSO') sync(); }).catch(function () {}); else sync(); }, 8000);
   window.addEventListener('online', function () { estadoPill(); sync(); });
-  setInterval(function () { if (!document.hidden && !RCI) pollRc(); }, 30000);
+  setInterval(function () { if (!document.hidden && !RCI) pollRc(); }, 15000);
   window.addEventListener('offline', estadoPill);
   window.addEventListener('beforeunload', function (e) { if (Q.length) { e.preventDefault(); e.returnValue = ''; } });
 

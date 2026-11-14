@@ -68,7 +68,7 @@
   if (P.get('s')) LS('aud_s', P.get('s'));
   var DEV = LS('aud_dev'); if (!DEV) { DEV = 'D' + Math.random().toString(36).slice(2, 10); LS('aud_dev', DEV); }
   var SEQ = Number(LS('aud_seq') || 0);
-  var INV = null, USER = '', CAT = [], IDX = {}, MC = {}, UBICS = [], UB = '', Q = [], HIST = [], CNT = { tot: 0, ub: {} }, LAST = { c: '', t: 0 }, FOT = {}, FASE = '', CATF2 = false, UASK = {}, MS = {}, PASK = {}, RC = null, RCI = null, IDX2 = {}, MX = {}, MT = {}, LACC = 0, ZONAS = ['VITRINA', 'PARED', 'MESA', 'ISLA', 'MOSTRADOR', 'EXHIBIDOR'], scanner = null, actx = null, syncing = false, ESTADO = '', ERRSRV = '', LEC = false, KBF = { s: '', t: 0, h: 0 };
+  var INV = null, USER = '', CAT = [], IDX = {}, MC = {}, UBICS = [], UB = '', Q = [], HIST = [], CNT = { tot: 0, ub: {} }, LAST = { c: '', t: 0 }, FOT = {}, FASE = '', CATF2 = false, UASK = {}, MS = {}, PASK = {}, RC = null, RCI = null, IDX2 = {}, MX = {}, MT = {}, LACC = 0, FSM = false, ZONAS = ['VITRINA', 'PARED', 'MESA', 'ISLA', 'MOSTRADOR', 'EXHIBIDOR'], scanner = null, actx = null, syncing = false, ESTADO = '', ERRSRV = '', LEC = false, KBF = { s: '', t: 0, h: 0 };
   var $ = function (id) { return document.getElementById(id); };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var sin0 = function (c) { return String(c == null ? '' : c).trim().replace(/^0+(?=.)/, ''); };
@@ -183,12 +183,13 @@
     var S = FASE === 'S';
     pantalla('<div class="top"><b>' + (S ? '🏪 ' : '📦 ') + esc(INV.nlugar) + ' · ' + esc(USER) + '</b><span class="pill p-ok" id="sp">✔</span></div><div class="wrap">' +
       '<div class="banner" style="background:' + (S ? '#3d2a6b' : '#0b3a5c') + ';display:flex;justify-content:space-between;align-items:center;gap:8px"><span>' + (S ? '🏪 SALA DE VENTAS · muestras (cuentan)' : '📦 ALMACÉN · cajas (conteo)') + '</span><a href="#" id="cfase" style="color:#9fd8ff;font-size:13px;white-space:nowrap">cambiar</a></div>' +
-      '<div id="est"></div>' + (INV.tipo === 'SORPRESA' ? '<div class="banner" style="background:#0e5132;display:flex;justify-content:space-between;align-items:center;gap:8px"><span>🎲 Auditoría sorpresa: busca y escanea estos productos</span><button class="big o" style="width:auto;padding:6px 12px;font-size:14px" id="srl">Ver lista</button></div>' : '') + '<div id="rcb"></div><div id="ubx"></div>' + (LEC ? '<div class="lec" id="lec">🔫 Lector listo · dispara al código<div class="mut" style="font-weight:600;font-size:13px;margin-top:4px">Pistola Bluetooth o celular con lector incorporado. No hace falta tocar la pantalla.</div></div>'
+      '<div id="est"></div>' + (FSM ? '<div class="banner" style="background:#7a4a00;display:flex;justify-content:space-between;align-items:center;gap:8px"><span>📦 <b>FUERA DE STOCK</b> · escanea las prendas que separaste. No cuentan; José decide.</span><button class="big g" style="width:auto;padding:6px 12px;font-size:14px" id="fsok">✔ Terminé</button></div>' : '') + (INV.tipo === 'SORPRESA' ? '<div class="banner" style="background:#0e5132;display:flex;justify-content:space-between;align-items:center;gap:8px"><span>🎲 Auditoría sorpresa: busca y escanea estos productos</span><button class="big o" style="width:auto;padding:6px 12px;font-size:14px" id="srl">Ver lista</button></div>' : '') + '<div id="rcb"></div><div id="ubx"></div>' + (LEC ? '<div class="lec" id="lec">🔫 Lector listo · dispara al código<div class="mut" style="font-weight:600;font-size:13px;margin-top:4px">Pistola Bluetooth o celular con lector incorporado. No hace falta tocar la pantalla.</div></div>'
         : '<div id="reader"></div><button class="big g" id="cam" style="margin:10px 0">▶ Empezar a escanear</button>') +
       '<button class="big o" id="bmodo" style="padding:8px;font-size:14px;margin-bottom:10px">' + (LEC ? '📷 Usar la cámara del celular' : '🔫 Usar lector / pistola en vez de cámara') + '</button>' +
       '<div class="res" id="res"><div class="mut" style="width:100%;text-align:center">El producto escaneado aparece aquí con su foto</div></div>' +
       '<div class="cnt"><div><b id="cub">0</b><span>' + (S ? 'En esta zona' : 'En este anaquel') + '</span></div><div><b id="ctot">0</b><span>' + (S ? 'Mis muestras' : 'Mis unidades') + '</span></div></div>' +
       '<div class="acts"><button id="bman">⌨ Digitar</button><button id="bdes">↩ Deshacer último</button><button id="bub">📍 ' + (S ? 'Cambiar zona' : 'Cambiar ubicación') + '</button><button class="fin" id="bfin">✅ ' + (S ? 'Terminé esta zona' : 'Terminé este anaquel') + '</button></div>' +
+      (FSM ? '' : '<button class="big o" id="bfs" style="margin-top:10px;padding:8px;font-size:14px;border-color:#e0a030">📦 Escanear fuera de stock (al final)</button>') +
       (S ? '<button class="big" id="bsala" style="margin-top:10px;background:linear-gradient(#7b52d6,#5a35b0)">🏁 Terminé la sala de ventas → pasar al almacén</button>' : '') +
       '<div style="display:flex;gap:8px;margin-top:10px"><input class="in" id="kb" placeholder="Pistola Bluetooth o escribe el código" inputmode="text" autocomplete="off"><button class="big o" style="width:auto;padding:0 16px" id="kbok">OK</button></div>' +
       '<div class="card" style="margin-top:12px"><b>🕘 Mis últimos escaneos</b><div class="list" id="hist"></div></div>' +
@@ -201,6 +202,8 @@
     };
     $('bman').onclick = manual; $('bdes').onclick = deshacer; $('bub').onclick = elegirUb; $('bfin').onclick = finUb;
     if ($('srl')) $('srl').onclick = listaSorpresa;
+    if ($('bfs')) $('bfs').onclick = function () { conf('📦 ¿Ya terminaste de contar? Ahora escanea solo las prendas que separaste por "fuera de stock".', function () { FSM = true; principal(); mostrar('warn', '<h2>📦 Modo fuera de stock</h2><div class="mut">Escanea cada prenda separada. Al terminar toca ✔ Terminé.</div>'); }, '📦 Sí, empezar'); };
+    if ($('fsok')) $('fsok').onclick = function () { FSM = false; principal(); mostrar('ok', '<h2>✔ Fuera de stock enviado</h2><div class="mut">José revisará esas prendas.</div>'); };
     $('cfase').onclick = function (e) { e.preventDefault(); elegirFase(); }; if ($('bsala')) $('bsala').onclick = finSala;
     $('kbok').onclick = function () { var v = $('kb').value.trim(); $('kb').value = ''; if (v) { LAST.c = ''; onCode(v); } };
     $('kb').onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); $('kbok').onclick(); } };
@@ -220,7 +223,7 @@
   function pintaCnt() { $('cub').textContent = UB ? (CNT.ub[UB] || 0) : 0; $('ctot').textContent = FASE === 'S' ? (CNT.s || 0) : CNT.tot; }
   function pintaHist() {
     $('hist').innerHTML = HIST.slice(-12).reverse().map(function (h) {
-      return '<div data-hq="' + h.q + '" class="' + (h.x ? 'x' : '') + '"><span>' + (h.m === 'X' ? '❓ ' : h.m === 'M' ? '⌨ ' : h.m === 'S' ? '🏪 ' : '') + esc(h.d) + '</span><span class="mut">' + esc(h.u) + ' · ' + new Date(h.t).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) + '</span></div>';
+      return '<div data-hq="' + h.q + '" class="' + (h.x ? 'x' : '') + '"><span>' + (h.m === 'X' ? '❓ ' : h.m === 'O' ? '📦 ' : h.m === 'M' ? '⌨ ' : h.m === 'S' ? '🏪 ' : '') + esc(h.d) + '</span><span class="mut">' + esc(h.u) + ' · ' + new Date(h.t).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) + '</span></div>';
     }).join('') || '<div class="mut">Aún nada</div>';
     $('hist').querySelectorAll('[data-hq]').forEach(function (d) { d.onclick = function () { var q = Number(d.dataset.hq), h = HIST.filter(function (z) { return z.q === q; })[0]; if (!h || h.x || h.n <= 0) return; conf('¿Quitar este escaneo? ' + h.d + ' (' + h.u + ')', function () { quitarH(h); }, '↩ Sí, quitar', 'No'); }; });
   }
@@ -262,6 +265,7 @@
     if (ESTADO === 'CERRADO' || ESTADO === 'ANULADO') { mostrar('bad', '<h2>🏁 Inventario ' + (ESTADO === 'ANULADO' ? 'anulado' : 'cerrado') + '</h2>'); feedback('bad'); return; }
     var i = buscar(t);
     if (RCI) { recScan(i, t); return; }
+    if (FSM) { fueraScan(i, t); return; }
     if (i >= 0) {
       if (!UB) { mostrar('warn', '<h2>📍 Primero ' + (FASE === 'S' ? 'elige la zona' : 'escanea el anaquel') + '</h2><div class="mut">Así sabemos dónde está cada producto.</div>'); feedback('warn'); return; }
       LACC = now; agregar(i, 1, 'E', t); return;
@@ -322,8 +326,8 @@
   }
   function quitarH(h) {
     if (h.x) return; var g = UB; UB = h.u;
-    encolar({ l: h.l || h.c, c: h.c, n: -1, m: h.m === 'S' ? 'S' : 'D' });
-    UB = g; h.x = true; if (h.m === 'S') CNT.s = (CNT.s || 1) - 1; else CNT.tot -= 1; CNT.ub[h.u] = (CNT.ub[h.u] || 1) - 1;
+    encolar({ l: h.l || h.c, c: h.c, n: -1, m: h.m === 'O' ? 'O' : h.m === 'S' ? 'S' : 'D' });
+    UB = g; h.x = true; if (h.m === 'O') {} else if (h.m === 'S') CNT.s = (CNT.s || 1) - 1; else CNT.tot -= 1; if (h.m !== 'O') CNT.ub[h.u] = (CNT.ub[h.u] || 1) - 1;
     guardar(); pintaCnt(); pintaHist(); syncPronto(); mostrar('warn', '<h2>↩ Quitado</h2><div class="mut">' + esc(h.d) + ' · no se cuenta</div>'); feedback('warn');
   }
   function preguntaMuestra(i, n, modo, leido, mc) {
@@ -434,8 +438,18 @@
     pide();
   }
   /* v91: un código que no está en la data NO se registra (alargaba la lista y confundía): se pide digitar el producto */
+  /* 📦 v96: al final se escanean aparte las prendas fuera de stock. Se registran (modo O) pero NO cuentan; José decide en su panel. */
+  function fueraScan(i, t) {
+    if (i >= 0) { var r = CAT[i]; mostrar('warn', '<h2>⚠ Este producto sí está en la data</h2><div>' + esc(r[3] + '-' + r[4] + ' · T' + r[6]) + '</div><div class="mut">No es fuera de stock: toca ✔ Terminé y escanéalo normal en su anaquel.</div>'); feedback('warn'); return; }
+    if (/[A-Za-z]/.test(t) && t.length <= 40) { mostrar('warn', '<h2>📍 Eso parece una ubicación</h2><div class="mut">En este modo solo se escanean prendas.</div>'); feedback('warn'); return; }
+    var c = sin0(t); encolar({ l: 'FUERA', c: c, n: 1, m: 'O' }); Q[Q.length - 1].u = UB || 'FUERA';
+    var veces = 1; HIST.forEach(function (h) { if (h.m === 'O' && h.c === c && !h.x) veces += h.n; });
+    HIST.push({ q: SEQ, t: Date.now(), c: c, l: 'FUERA', u: UB || 'FUERA', m: 'O', n: 1, d: 'Fuera de stock ' + c });
+    guardar(); pintaHist(); syncPronto();
+    mostrar('ok', '<div class="okh">📦 Anotado fuera de stock' + (veces > 1 ? ' · ×' + veces : '') + '</div><div style="font-size:18px;font-weight:800">' + esc(c) + '</div><div class="mut">No cuenta en el inventario. José lo revisa en el maestro real y decide.</div>', NOFOTO); feedback('ok');
+  }
   function desconocido(t) {
-    mostrar('bad', '<h2>❓ Código no encontrado · no se contó</h2><div style="font-size:18px;font-weight:800">' + esc(t) + '</div><div class="mut">Este código no está en la data de Artemis. Busca el producto por su modelo y digítalo.</div><button class="big o" style="margin-top:8px;padding:10px;font-size:15px" id="dgx">⌨ Digitar el producto</button>', NOFOTO);
+    mostrar('bad', '<h2>❓ Fuera de stock · no se contó</h2><div style="font-size:18px;font-weight:800">' + esc(t) + '</div><div class="mut">Sepárala para el final: cuando termines, toca <b>📦 Escanear fuera de stock</b>. Si sabes qué producto es, también puedes digitarlo.</div><button class="big o" style="margin-top:8px;padding:10px;font-size:15px" id="dgx">⌨ Digitar el producto</button>', NOFOTO);
     feedback('bad'); $('dgx').onclick = function () { manual(); };
   }
   function fijarUb(u) {
@@ -461,8 +475,8 @@
   function deshacer2(h) {
     {
       var guardaUb = UB; UB = h.u;
-      encolar({ l: h.l || h.c, c: h.c, n: -1, m: h.m === 'X' ? 'X' : h.m === 'S' ? 'S' : 'D' });
-      UB = guardaUb; h.x = true; if (h.m === 'S') CNT.s = (CNT.s || 1) - 1; else CNT.tot -= 1; CNT.ub[h.u] = (CNT.ub[h.u] || 1) - 1;
+      encolar({ l: h.l || h.c, c: h.c, n: -1, m: h.m === 'X' ? 'X' : h.m === 'O' ? 'O' : h.m === 'S' ? 'S' : 'D' });
+      UB = guardaUb; h.x = true; if (h.m === 'O') {} else if (h.m === 'S') CNT.s = (CNT.s || 1) - 1; else CNT.tot -= 1; if (h.m !== 'O') CNT.ub[h.u] = (CNT.ub[h.u] || 1) - 1;
       guardar(); pintaCnt(); pintaHist(); mostrar('warn', '<h2>↩ Deshecho</h2><div>' + esc(h.d) + '</div>'); syncPronto(); return;
     }
     avisar('No hay nada para deshacer');
@@ -555,7 +569,50 @@
 
   /* ---------- cámara ---------- */
   /* v91: productos y anaqueles solo con código de barras (el QR solo para entrar al inventario); zoom, linterna y más resolución */
+  /* 📷 v96: lector nativo del celular (BarcodeDetector = el mismo motor de Google que usa la cámara de Android). Lee solo la franja visible.
+     Si el celular no lo tiene (iPhone, Chrome viejo) se usa el lector de antes. */
+  var NATNO = false;
+  function camNativa(cb, qr) {
+    var want = qr ? ['qr_code'] : ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'];
+    return BarcodeDetector.getSupportedFormats().then(function (sup) {
+      var fm = want.filter(function (f) { return sup.indexOf(f) >= 0; }); if (!fm.length) throw new Error('sin formatos');
+      var det = new BarcodeDetector({ formats: fm });
+      return navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, focusMode: 'continuous' }, audio: false }).then(function (st) {
+        var rd = $('reader'); if (!rd) { st.getTracks().forEach(function (t) { t.stop(); }); throw new Error('sin lector'); }
+        rd.innerHTML = '<div id="rdi"><video id="rdv" playsinline muted autoplay style="width:100%;display:block"></video></div>';
+        var v = $('rdv'), tr = st.getVideoTracks()[0]; v.srcObject = st; try { v.play(); } catch (e) {}
+        var S = { _on: true, _qr: !!qr, _nat: true, clear: function () {},
+          stop: function () { S._on = false; st.getTracks().forEach(function (t) { t.stop(); }); return Promise.resolve(); },
+          getRunningTrackCapabilities: function () { return tr.getCapabilities ? tr.getCapabilities() : {}; },
+          applyVideoConstraints: function (c) { return tr.applyConstraints(c); } };
+        var busy = false;
+        (function loop() {
+          if (!S._on) return;
+          if (!busy && v.readyState >= 2 && v.videoWidth) {
+            busy = true; var vh = v.videoHeight, vw = v.videoWidth, r2 = $('reader'), fr = 1;
+            if (!qr && r2 && v.clientHeight) fr = Math.min(1, (r2.clientHeight / v.clientHeight) * 1.15);
+            var sh = Math.max(40, Math.round(vh * fr)), sy = Math.round((vh - sh) / 2);
+            createImageBitmap(v, 0, sy, vw, sh).then(function (bm) { return det.detect(bm).then(function (L) { try { bm.close(); } catch (e) {} return L; }); })
+              .then(function (L) { busy = false; if (!L.length || !S._on) return;
+                var c = sh / 2; L.sort(function (a, b) { return Math.abs(a.boundingBox.y + a.boundingBox.height / 2 - c) - Math.abs(b.boundingBox.y + b.boundingBox.height / 2 - c); });
+                cb(L[0].rawValue); })
+              .catch(function () { busy = false; });
+          }
+          setTimeout(loop, 70);
+        })();
+        return S;
+      });
+    });
+  }
   function camara(cb, qr) {
+    if (!NATNO && window.BarcodeDetector && navigator.mediaDevices && window.createImageBitmap) {
+      if (scanner && !scanner._nat) { try { scanner.clear(); } catch (e) {} } scanner = null;
+      camNativa(cb, qr).then(function (S) { scanner = S; if (!qr) { var r2 = $('reader'); if (r2) { r2.classList.add('on'); try { r2.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) {} } zoomBar(); } })
+        .catch(function (e) { if (/NotAllowed|Permission/i.test(String(e && e.name) + e)) { avisar('No se pudo abrir la cámara: ' + e); var b = $('cam'); if (b) { b.textContent = '▶ Empezar a escanear'; b.className = 'big g'; } return; }
+          NATNO = true; var rd = $('reader'); if (rd) rd.innerHTML = ''; camara(cb, qr); });
+      return;
+    }
+    if (scanner && scanner._nat) scanner = null;
     if (typeof Html5Qrcode === 'undefined') { avisar('No cargó el lector. Revisa internet y vuelve a abrir.'); return; }
     var F = Html5QrcodeSupportedFormats;
     if (scanner && scanner._qr !== !!qr) { try { scanner.clear(); } catch (e) {} scanner = null; }

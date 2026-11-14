@@ -109,7 +109,13 @@
     $('fs').onclick = function () { fijarFase('S'); }; $('fa').onclick = function () { fijarFase('A'); };
   }
   function fijarFase(f) {
-    if (f === 'A' && FASE === 'S' && !LS(K('kd'))) { conf('¿Ya terminaste toda la sala de ventas? Avisa antes de pasar al almacén: así Logística recibe el correo de lo que falta exhibir.', finSala2, '🏁 Sí, terminé la sala', 'Aún no · solo cambiar a almacén', function () { FASE = f; UB = ''; guardar(); principal(); }); return; }
+    /* 🔒 v99: el almacén se abre SOLO cuando la sala de ventas está terminada (por este celular o por cualquier compañero). */
+    if (f === 'A' && FASE !== 'A' && !LS(K('kd')) && !(ALMACEN() || INV.tipo === 'SORPRESA' || INV.tipo === 'LIBRE')) {
+      var pasa = function () { FASE = f; UB = ''; guardar(); principal(); };
+      var obliga = function () { conf('🔒 Primero hay que terminar la sala de ventas. Cuando toda la sala esté escaneada, marca "Terminé la sala" y recién se abre el almacén.', finSala2, '🏁 Ya terminé la sala', '🏪 Seguir en la sala', function () { if (!FASE) fijarFase('S'); }); };
+      api('salak').then(function (r) { if (r.k) { LS(K('kd'), '1'); avisar('✔ La sala de ventas ya fue terminada' + (r.u ? ' (avisó ' + r.u + ')' : '') + '. Pasas al almacén.'); pasa(); } else obliga(); }).catch(obliga);
+      return;
+    }
     FASE = f; UB = ''; guardar(); principal();
   }
 
@@ -190,7 +196,7 @@
       '<div class="cnt"><div><b id="cub">0</b><span>' + (S ? 'En esta zona' : 'En este anaquel') + '</span></div><div><b id="ctot">0</b><span>' + (S ? 'Mis muestras' : 'Mis unidades') + '</span></div></div>' +
       '<div class="acts"><button id="bman">⌨ Digitar</button><button id="bdes">↩ Deshacer último</button><button id="bub">📍 ' + (S ? 'Cambiar zona' : 'Cambiar ubicación') + '</button><button class="fin" id="bfin">✅ ' + (S ? 'Terminé esta zona' : 'Terminé este anaquel') + '</button></div>' +
       (FSM ? '' : '<button class="big o" id="bfs" style="margin-top:10px;padding:8px;font-size:14px;border-color:#e0a030">📦 Escanear fuera de stock (al final)</button>') +
-      (S ? '<button class="big" id="bsala" style="margin-top:10px;background:linear-gradient(#7b52d6,#5a35b0)">🏁 Terminé la sala de ventas → pasar al almacén</button>' : '') +
+      (S ? '<button class="big" id="bsala" style="margin-top:10px;background:linear-gradient(#7b52d6,#5a35b0)">🏁 Terminé la sala de ventas → pasar al almacén</button><div class="mut" style="margin-top:6px;text-align:center">🔒 El almacén se abre cuando la sala esté terminada.</div>' : '') +
       '<div style="display:flex;gap:8px;margin-top:10px"><input class="in" id="kb" placeholder="Pistola Bluetooth o escribe el código" inputmode="text" autocomplete="off"><button class="big o" style="width:auto;padding:0 16px" id="kbok">OK</button></div>' +
       '<div class="card" style="margin-top:12px"><b>🕘 Mis últimos escaneos</b><div class="list" id="hist"></div></div>' +
       '<div class="mut" style="text-align:center;margin:10px 0 30px">' + esc(INV.id) + ' · <a href="#" id="salir" style="color:#8fb0d8">cambiar de persona</a></div></div>');
@@ -536,7 +542,7 @@
 
   /* ---------- envío por lotes (si no hay señal, se guarda y se envía después) ---------- */
   var tSync = null;
-  function syncPronto() { clearTimeout(tSync); tSync = setTimeout(sync, 2500); estadoPill(); }
+  function syncPronto() { clearTimeout(tSync); tSync = setTimeout(sync, 5000); estadoPill(); } /* ⚡ v99: junta los escaneos de ~5 s en un solo envío (antes 2,5 s); igual se envía cada 8 s */
   function sync() {
     if (syncing || !Q.length || !INV) { estadoPill(); return; }
     if (!navigator.onLine) { estadoPill(); return; }
@@ -649,6 +655,7 @@
         ['327805', '3278055', '4060509396697', 'F35543', '0', '0', '8', 'ADILETTE AQUA', 'ADIDAS', 'Sandalias', 'F2-01', 1],
         ['310845', '3108451', '4064037145970', 'FY8072', '0', '0', '11K', 'SAND ADILETTE AQUA K', 'ADIDAS', 'Sandalias', '', 0]] }) });
       if (a === 'rc') return ok({ ok: true, ms: [], rc: null });
+      if (a === 'salak') return ok({ ok: true, k: 0 });
       if (a === 'sinexh') return ok({ ok: true, n: 2, l: [['F35539', '0', 'NEGRO', 'ADILETTE AQUA', 'ADIDAS'], ['FY8072', '0', '', 'SAND ADILETTE AQUA K', 'ADIDAS']] });
       if (a === 'push') { var mx = 0; (x.items || []).forEach(function (i) { mx = Math.max(mx, i.q); }); return ok({ ok: true, ack: mx, estado: 'EN CURSO' }); }
       if (a === 'fotos') return ok({ ok: true, fotos: {} });

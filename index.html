@@ -128,7 +128,7 @@
   }
 
   /* ---------- pantallas ---------- */
-  function pantalla(h) { $('app').innerHTML = (DEMO ? '<div class="demo">MODO DEMO · nada se envía a Artemis</div>' : '') + (INV && INV.tipo === 'PRUEBA' ? '<div class="demo" style="background:#7a4b00">🧪 MODO PRUEBA · se muestran cantidades · no cuenta para ninguna tienda</div>' : '') + (INV && INV.tipo === 'LIBRE' ? '<div class="demo" style="background:#1f4f8a">📋 ESCANEO LIBRE · fichero · no cuenta para ninguna tienda</div>' : '') + h; }
+  function pantalla(h) { $('app').innerHTML = (DEMO ? '<div class="demo">MODO DEMO · nada se envía a Artemis' + (INV && CAT.length ? '<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:6px"><button data-demo="rc" style="font-size:12px;padding:4px 8px;border-radius:8px;border:0;background:#fff3;color:#fff">🧪 Simular reconteo</button><button data-demo="pis" style="font-size:12px;padding:4px 8px;border-radius:8px;border:0;background:#fff3;color:#fff">🧪 Simular pistola "]C1"</button></div>' : '') + '</div>' : '') + (INV && INV.tipo === 'PRUEBA' ? '<div class="demo" style="background:#7a4b00">🧪 MODO PRUEBA · se muestran cantidades · no cuenta para ninguna tienda</div>' : '') + (INV && INV.tipo === 'LIBRE' ? '<div class="demo" style="background:#1f4f8a">📋 ESCANEO LIBRE · fichero · no cuenta para ninguna tienda</div>' : '') + h; }
   function inicio() {
     recuperar();
     if (!TOKEN) return sinCodigo();
@@ -264,7 +264,8 @@
   }
   function dv(d) { var s = 0; for (var i = d.length - 1, w = 3; i >= 0; i--, w = 4 - w) s += Number(d[i]) * w; return String((10 - s % 10) % 10); }
   function onCode(raw) {
-    var t = String(raw || '').trim(); if (!t) return;
+    /* 🔫 v100: algunas pistolas anteponen un identificador ("]C1", "]E0"…) y separadores invisibles; se quitan para reconocer el producto */
+    var t = String(raw || '').replace(/[\x00-\x1f\x7f]/g, '').trim().replace(/^\][A-Za-z][0-9A-Za-z]/, '').trim(); if (!t) return;
     var now = Date.now(); if (t === LAST.c && now - LAST.t < 1800) { LAST.t = now; return; } if (now - LACC < 450) return; LAST = { c: t, t: now };
     if (/^https?:\/\//i.test(t)) return;
     if ($('mdup')) return;
@@ -276,7 +277,10 @@
       if (!UB) { mostrar('warn', '<h2>📍 Primero ' + (FASE === 'S' ? 'elige la zona' : 'escanea el anaquel') + '</h2><div class="mut">Así sabemos dónde está cada producto.</div>'); feedback('warn'); return; }
       LACC = now; agregar(i, 1, 'E', t); return;
     }
-    if (/[A-Za-z]/.test(t) && t.length <= 40) { fijarUb(t.toUpperCase()); return; }
+    if (/[A-Za-z]/.test(t) && t.length <= 40) { var T = t.toUpperCase();
+      /* 🔫 v100: un anaquel que no figura en el sistema se confirma (antes un producto leído raro cambiaba de anaquel sin avisar) */
+      if (FASE === 'A' && UB && UBICS.length && UBICS.indexOf(T) < 0 && !/^SALA-/.test(T)) { feedback('ask'); conf('📍 ¿Cambiar al anaquel "' + T + '"? No figura en el sistema de esta tienda. Si escaneaste un producto, toca "No".', function () { fijarUb(T); }, '📍 Sí, cambiar de anaquel', '✋ No, era otra cosa'); return; }
+      fijarUb(T); return; }
     if (!UB) { mostrar('warn', '<h2>📍 Primero escanea el anaquel</h2>'); feedback('warn'); return; }
     desconocido(t);
   }
@@ -405,9 +409,22 @@
     if (!RCI) return;
     $('rcp').onclick = function () { recSuma(1); }; $('rcm').onclick = function () { if (RCI.n > 0) recSuma(-1); };
     $('rcf').onclick = function () { conf('¿Terminaste? Encontraste ' + RCI.n + ' unidad(es) de este producto.', rcFin, '✔ Sí, terminé'); };
-    var rcFin = function () {
+    var rcFin = function () { var q1 = RC.a ? RC.a[RCI.ci] : null; if (q1 != null && Number(q1) !== RCI.n) { pideMotivo(rcFin2); return; } rcFin2(); };
+    var rcFin2 = function (mot) {
+      if (mot) encolar({ l: String(mot).slice(0, 80), c: RCI.ci, n: 0, m: 'J' }); /* 💬 v100: motivo cuando el reconteo no coincide con el 1.º conteo */
       encolar({ l: 'R' + RC.r, c: RCI.ci, n: RCI.n, m: 'Z' }); guardar(); syncPronto();
       RC.it = RC.it.filter(function (c) { return c !== RCI.ci; }); RCI = null; pintaRc(); mostrar('ok', '<h2>✔ Reconteo enviado</h2>'); feedback('ok'); setTimeout(pollRc, 4000); };
+  }
+  /* 💬 v100: un toque para explicar por qué cambió (solo si el reconteo salió distinto al 1.º conteo; no se muestra cuánto era) */
+  function pideMotivo(cb) {
+    var M = ['📍 Estaba en otra ubicación', '🙈 No lo había escaneado', '2️⃣ Lo escaneé dos veces', '🛒 Se vendió', '🔍 No lo encuentro'];
+    var m = document.createElement('div'); m.className = 'modal'; document.body.appendChild(m); feedback('ask');
+    m.innerHTML = '<div><div style="font-weight:900;color:#4fc3ff;letter-spacing:.5px;margin-bottom:6px">ARTEMIS</div><div style="font-size:18px;font-weight:800;margin-bottom:4px">💬 El reconteo salió distinto al primer conteo</div><div class="mut" style="margin-bottom:12px">¿Qué pasó? Toca una opción.</div>' +
+      M.map(function (x, i) { return '<button class="big o" style="margin-bottom:8px;text-align:left" data-mo="' + i + '">' + esc(x) + '</button>'; }).join('') +
+      '<button class="big o" style="margin-bottom:8px;text-align:left" id="moo">✏️ Otro</button><div id="mow" style="display:none"><input id="mot" maxlength="70" placeholder="Escribe en pocas palabras" style="width:100%;padding:12px;font-size:16px;border-radius:10px;border:1px solid #2b4a7a;background:#0b1d3a;color:#e6f0ff;box-sizing:border-box"><button class="big g" style="margin-top:8px" id="mook">Enviar</button></div></div>';
+    m.querySelectorAll('[data-mo]').forEach(function (b) { b.onclick = function () { m.remove(); cb(M[Number(b.dataset.mo)]); }; });
+    m.querySelector('#moo').onclick = function () { m.querySelector('#mow').style.display = 'block'; m.querySelector('#mot').focus(); };
+    m.querySelector('#mook').onclick = function () { var v = m.querySelector('#mot').value.trim(); if (v.length < 3) { m.querySelector('#mot').focus(); return; } m.remove(); cb('✏️ ' + v); };
   }
   function recSuma(n) { encolar({ l: 'R' + RC.r, c: RCI.ci, n: n, m: 'C' }); RCI.n += n; guardar(); pintaRc(); syncPronto(); }
   function recScan(i, t) {
@@ -645,6 +662,11 @@
   }
 
   /* ---------- modo demo (para practicar sin tocar Artemis) ---------- */
+  /* 🧪 v100: botones del modo práctica (pestaña Pruebas de José) */
+  if (DEMO) document.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('[data-demo]'); if (!b) return; e.preventDefault();
+    if (b.dataset.demo === 'rc') { if (RCI) { avisar('Termina primero el reconteo que tienes abierto'); return; } RC = { r: 1, it: ['327806', '327807'], a: { '327806': 2, '327807': 1 } }; LS(K('rcv'), ''); feedback('ask');
+      conf('🔁 Logística te pide recontar 2 productos. Búscalos y escanéalos de nuevo. (Práctica: si el reconteo sale distinto, te pedirá el motivo.)', listaRc, '🔁 Ver qué recontar', 'Luego'); return; }
+    if (b.dataset.demo === 'pis') { if (!UB) { avisar('Primero elige o escanea un anaquel'); return; } LAST = { c: '', t: 0 }; LACC = 0; onCode(']C1000000327806'); } });
   function demoApi(a, x) {
     return new Promise(function (ok) { setTimeout(function () {
       if (a === 'join') return ok({ ok: true, inv: { id: 'DEMO', lugar: 'DEMO', nlugar: 'Tienda de práctica', estado: 'EN CURSO', tipo: 'TOTAL', equipo: ['Vendedor 1', 'Vendedor 2'] } });
